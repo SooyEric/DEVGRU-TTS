@@ -17,7 +17,7 @@
     "discord-player-youtubedlp": "^1.1.8",
     "discord.js": "^14.24.0",
     "ffmpeg-static": "^5.2.0",
-    "google-tts-api": "^9.0.2",
+    "google-tts-api": "^2.0.2",
     "mediaplex": "^1.0.0"
   }
 }
