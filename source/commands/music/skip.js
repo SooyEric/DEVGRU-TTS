@@ -26,10 +26,16 @@ export async function execute(
     const guildId =
         message.guild.id;
 
+    const currentTrack =
+        musicManager.getCurrentTrack(
+            guildId
+        );
+
     if (
         !musicManager.isPlaying(
             guildId
-        )
+        ) ||
+        !currentTrack
     ) {
         return message.reply({
             embeds: [
@@ -37,11 +43,6 @@ export async function execute(
             ]
         });
     }
-
-    const currentTrack =
-        musicManager.getCurrentTrack(
-            guildId
-        );
 
     const skipped =
         musicManager.skip(
