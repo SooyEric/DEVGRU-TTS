@@ -52,17 +52,21 @@ export async function execute(
     const guildId =
         message.guild.id;
 
-    const wasPlaying =
-        musicManager.isPlaying(
-            guildId
-        );
-
-    const queueBefore =
-        musicManager.getQueueSize(
-            guildId
-        );
-
     try {
+        /*
+         * Comprobamos el estado justo antes
+         * de enviar la solicitud.
+         */
+        const queueBefore =
+            musicManager.getQueueSize(
+                guildId
+            );
+
+        const wasPlaying =
+            musicManager.isPlaying(
+                guildId
+            );
+
         const result =
             await musicManager.play(
                 voiceChannel,
@@ -88,11 +92,14 @@ export async function execute(
         }
 
         /*
-         * Si ya había una canción
-         * reproduciéndose, la nueva
-         * canción fue añadida a la cola.
+         * Si ya había reproducción o canciones
+         * pendientes antes de esta solicitud,
+         * esta canción pertenece a la cola.
          */
-        if (wasPlaying || queueBefore > 0) {
+        if (
+            wasPlaying ||
+            queueBefore > 0
+        ) {
             const position =
                 queueBefore + 1;
 
@@ -107,6 +114,9 @@ export async function execute(
             });
         }
 
+        /*
+         * Primera canción.
+         */
         return message.reply({
             embeds: [
                 createNowPlayingEmbed(
