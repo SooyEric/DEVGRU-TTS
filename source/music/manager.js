@@ -1,11 +1,14 @@
 import { MusicPlayer } from './player.js';
+import { MusicQueue } from './queue.js';
 import { registerExtractors } from './sources/index.js';
+
 import { logger } from '../utils/logger.js';
 
 export class MusicManager {
     constructor(client) {
-        this.client = client;
-        this.musicPlayer = new MusicPlayer(client);
+        this.player = new MusicPlayer(client);
+        this.queue = new MusicQueue(this.player);
+
         this.initialized = false;
     }
 
@@ -14,23 +17,27 @@ export class MusicManager {
             return;
         }
 
-        logger.info('Inicializando sistema de música...');
+        logger.info(
+            'Inicializando sistema de música...'
+        );
 
-        await registerExtractors(this.musicPlayer.player);
+        await registerExtractors(
+            this.player.player
+        );
 
         this.initialized = true;
 
-        logger.success('Sistema de música inicializado.');
+        logger.success(
+            'Sistema de música inicializado.'
+        );
     }
 
-    async play(voiceChannel, query, metadata = {}) {
-        if (!this.initialized) {
-            throw new Error(
-                'El sistema de música todavía no ha sido inicializado.'
-            );
-        }
-
-        return await this.musicPlayer.play(
+    async play(
+        voiceChannel,
+        query,
+        metadata = {}
+    ) {
+        return this.player.play(
             voiceChannel,
             query,
             metadata
@@ -38,30 +45,46 @@ export class MusicManager {
     }
 
     skip(guildId) {
-        return this.musicPlayer.skip(guildId);
+        return this.player.skip(guildId);
     }
 
     getQueue(guildId) {
-        return this.musicPlayer.getQueue(guildId);
+        return this.queue.get(guildId);
     }
 
     getCurrentTrack(guildId) {
-        return this.musicPlayer.getCurrentTrack(guildId);
+        return this.queue.getCurrent(guildId);
     }
 
     getTracks(guildId) {
-        return this.musicPlayer.getTracks(guildId);
+        return this.queue.getTracks(guildId);
     }
 
     getQueueSize(guildId) {
-        return this.musicPlayer.getQueueSize(guildId);
+        return this.queue.getSize(guildId);
     }
 
     isPlaying(guildId) {
-        return this.musicPlayer.isPlaying(guildId);
+        return this.queue.isPlaying(guildId);
     }
 
-    async destroy(guildId) {
-        return await this.musicPlayer.destroy(guildId);
+    pause(guildId) {
+        return this.player.pause(guildId);
+    }
+
+    resume(guildId) {
+        return this.player.resume(guildId);
+    }
+
+    stop(guildId) {
+        return this.player.stop(guildId);
+    }
+
+    destroy(guildId) {
+        return this.player.destroy(guildId);
+    }
+
+    isConnected(guildId) {
+        return this.player.isConnected(guildId);
     }
 }
