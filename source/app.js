@@ -1,15 +1,22 @@
 import {
     Client,
-    GatewayIntentBits,
-    Partials
+    GatewayIntentBits
 } from 'discord.js';
 
 import { config } from './utils/config.js';
 import { logger } from './utils/logger.js';
 
-import { CommandHandler } from './commandHandler.js';
-import { MusicManager } from './music/manager.js';
-import { TTSManager } from './tts/manager.js';
+import {
+    CommandHandler
+} from './commandHandler.js';
+
+import {
+    MusicManager
+} from './music/manager.js';
+
+import {
+    TTSManager
+} from './tts/manager.js';
 
 import ready from './events/ready.js';
 import messageCreate from './events/messageCreate.js';
@@ -22,15 +29,18 @@ if (!config.token) {
     );
 }
 
+if (!config.ttsChannelId) {
+    logger.warn(
+        'TTS_CHANNEL_ID no está configurado. El sistema TTS permanecerá desactivado.'
+    );
+}
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
-    ],
-    partials: [
-        Partials.Channel
     ]
 });
 
@@ -43,42 +53,52 @@ client.musicManager =
 client.ttsManager =
     new TTSManager();
 
-client.once('ready', async () => {
-    try {
-        await client.musicManager.initialize();
+client.once(
+    'ready',
+    async () => {
+        try {
+            await client.musicManager
+                .initialize();
 
-        await ready(client);
+            await ready(client);
 
-        logger.success(
-            'DEVGRU-TTS está completamente iniciado.'
-        );
-    } catch (error) {
-        logger.error(
-            'No se pudo inicializar DEVGRU-TTS.',
-            error
-        );
+            logger.success(
+                'DEVGRU-TTS está completamente iniciado.'
+            );
+        } catch (error) {
+            logger.error(
+                'No se pudo inicializar DEVGRU-TTS.',
+                error
+            );
 
-        process.exit(1);
+            process.exit(1);
+        }
     }
-});
+);
 
-client.on('messageCreate', async message => {
-    try {
-        await messageCreate(
-            message,
-            client
-        );
-    } catch (error) {
-        logger.error(
-            'Error en messageCreate.',
-            error
-        );
+client.on(
+    'messageCreate',
+    async message => {
+        try {
+            await messageCreate(
+                message,
+                client
+            );
+        } catch (error) {
+            logger.error(
+                'Error en messageCreate.',
+                error
+            );
+        }
     }
-});
+);
 
 client.on(
     'voiceStateUpdate',
-    async (oldState, newState) => {
+    async (
+        oldState,
+        newState
+    ) => {
         try {
             await voiceStateUpdate(
                 oldState,
@@ -94,20 +114,31 @@ client.on(
     }
 );
 
-client.on('error', error);
+client.on(
+    'error',
+    error
+);
 
-process.on('unhandledRejection', error => {
-    logger.error(
-        'Unhandled promise rejection.',
-        error
-    );
-});
+process.on(
+    'unhandledRejection',
+    error => {
+        logger.error(
+            'Unhandled promise rejection.',
+            error
+        );
+    }
+);
 
-process.on('uncaughtException', error => {
-    logger.error(
-        'Uncaught exception.',
-        error
-    );
-});
+process.on(
+    'uncaughtException',
+    error => {
+        logger.error(
+            'Uncaught exception.',
+            error
+        );
+    }
+);
 
-client.login(config.token);
+client.login(
+    config.token
+);
