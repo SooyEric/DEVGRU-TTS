@@ -54,7 +54,7 @@ client.ttsManager =
     new TTSManager();
 
 client.once(
-    'ready',
+    'clientReady',
     async () => {
         try {
             await client.musicManager
