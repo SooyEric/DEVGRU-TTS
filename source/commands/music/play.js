@@ -1,8 +1,7 @@
 import {
     errorNoVoiceChannel,
     errorNoQuery,
-    errorPlayback,
-    errorInvalidFile
+    errorPlayback
 } from '../../embeds/errors.js';
 
 import {
@@ -10,20 +9,33 @@ import {
     createAddedToQueueEmbed
 } from '../../embeds/music.js';
 
-import { getAttachmentAudio } from '../../utils/parser.js';
+import {
+    getAttachmentAudio
+} from '../../utils/parser.js';
 
-export async function execute(message, args, musicManager) {
-    const voiceChannel = message.member?.voice?.channel;
+export async function execute(
+    message,
+    args,
+    musicManager
+) {
+    const voiceChannel =
+        message.member?.voice?.channel;
 
     if (!voiceChannel) {
         return message.reply({
-            embeds: [errorNoVoiceChannel()]
+            embeds: [
+                errorNoVoiceChannel()
+            ]
         });
     }
 
-    const attachment = getAttachmentAudio(message.attachments);
+    const attachment =
+        getAttachmentAudio(
+            message.attachments
+        );
 
-    let query = args.join(' ').trim();
+    let query =
+        args.join(' ').trim();
 
     if (!query && attachment) {
         query = attachment.url;
@@ -31,34 +43,52 @@ export async function execute(message, args, musicManager) {
 
     if (!query) {
         return message.reply({
-            embeds: [errorNoQuery()]
+            embeds: [
+                errorNoQuery()
+            ]
         });
     }
 
     try {
-        const result = await musicManager.play(
-            voiceChannel,
-            query,
-            {
-                requestedBy: message.author
-            }
-        );
+        const result =
+            await musicManager.play(
+                voiceChannel,
+                query,
+                {
+                    requestedBy:
+                        message.author
+                }
+            );
 
-        const track = result?.track;
+        const track =
+            result?.track;
 
         if (!track) {
             return message.reply({
-                embeds: [errorPlayback()]
+                embeds: [
+                    errorPlayback()
+                ]
             });
         }
 
-        const queue = musicManager.getQueue(message.guild.id);
+        const guildId =
+            message.guild.id;
 
-        const isPlaying = queue?.isPlaying?.() ?? false;
-        const queueSize = musicManager.getQueueSize(
-            message.guild.id
-        );
+        const queueSize =
+            musicManager.getQueueSize(
+                guildId
+            );
 
+        const isPlaying =
+            musicManager.isPlaying(
+                guildId
+            );
+
+        /*
+         * Si ya había una canción
+         * reproduciéndose, Discord Player
+         * añade la nueva a la cola.
+         */
         if (isPlaying && queueSize > 0) {
             return message.reply({
                 embeds: [
@@ -80,10 +110,15 @@ export async function execute(message, args, musicManager) {
             ]
         });
     } catch (error) {
-        console.error('Error en -play:', error);
+        console.error(
+            'Error en -play:',
+            error
+        );
 
         return message.reply({
-            embeds: [errorPlayback()]
+            embeds: [
+                errorPlayback()
+            ]
         });
     }
 }
