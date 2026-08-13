@@ -3,78 +3,182 @@ import {
     QueryType
 } from 'discord-player';
 
-import { logger } from '../utils/logger.js';
+import {
+    logger
+} from '../utils/logger.js';
 
 export class MusicPlayer {
     constructor(client) {
         this.player = new Player(client);
+
+        this.setupEvents();
     }
 
-    async play(voiceChannel, query, metadata = {}) {
-        const result = await this.player.play(
-            voiceChannel,
-            query,
-            {
-                searchEngine: QueryType.AUTO,
-                nodeOptions: {
-                    metadata,
-                    leaveOnEmpty: false,
-                    leaveOnEnd: false,
-                    leaveOnStop: false
-                }
+    setupEvents() {
+        this.player.events.on(
+            'playerStart',
+            (queue, track) => {
+                logger.info(
+                    `▶️ Reproduciendo: ${track.title}`
+                );
             }
         );
 
+        this.player.events.on(
+            'audioTrackAdd',
+            (queue, track) => {
+                logger.info(
+                    `➕ Añadido a cola: ${track.title}`
+                );
+            }
+        );
+
+        this.player.events.on(
+            'playerFinish',
+            (queue, track) => {
+                logger.info(
+                    `⏹️ Finalizó: ${track.title}`
+                );
+            }
+        );
+
+        this.player.events.on(
+            'error',
+            (queue, error) => {
+                logger.error(
+                    'Error del reproductor:',
+                    error
+                );
+            }
+        );
+
+        this.player.events.on(
+            'playerError',
+            (queue, error) => {
+                logger.error(
+                    'Error reproduciendo audio:',
+                    error
+                );
+            }
+        );
+
+        this.player.events.on(
+            'disconnect',
+            queue => {
+                logger.info(
+                    `🔌 Música desconectada en ${queue.guild.id}.`
+                );
+            }
+        );
+    }
+
+    async play(
+        voiceChannel,
+        query,
+        metadata = {}
+    ) {
+        const result =
+            await this.player.play(
+                voiceChannel,
+                query,
+                {
+                    searchEngine:
+                        QueryType.AUTO,
+
+                    nodeOptions: {
+                        metadata,
+
+                        leaveOnEmpty: false,
+                        leaveOnEnd: false,
+                        leaveOnStop: false,
+
+                        bufferingTimeout: 15000,
+
+                        skipOnNoStream: true
+                    }
+                }
+            );
+
         logger.info(
-            `Reproduciendo "${result.track.title}".`
+            `Track encontrado: ${result.track.title}`
+        );
+
+        logger.info(
+            `Duración: ${result.track.duration}`
         );
 
         return result;
     }
 
     getQueue(guildId) {
-        return this.player.nodes.get(guildId);
+        return this.player.nodes.get(
+            guildId
+        );
     }
 
     getCurrentTrack(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         return queue?.currentTrack ?? null;
     }
 
     getTracks(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         return queue?.tracks.toArray() ?? [];
     }
 
     getQueueSize(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         return queue?.tracks.size ?? 0;
     }
 
     isPlaying(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
-        return Boolean(
-            queue &&
-            queue.isPlaying()
-        );
-    }
-
-    skip(guildId) {
-        const queue = this.getQueue(guildId);
-
-        if (!queue || !queue.isPlaying()) {
+        if (!queue) {
             return false;
         }
 
-        return queue.node.skip();
+        return queue.node.isPlaying();
+    }
+
+    isPaused(guildId) {
+        const queue =
+            this.getQueue(guildId);
+
+        if (!queue) {
+            return false;
+        }
+
+        return queue.node.isPaused();
+    }
+
+    skip(guildId) {
+        const queue =
+            this.getQueue(guildId);
+
+        if (!queue) {
+            return false;
+        }
+
+        if (!queue.node.isPlaying()) {
+            return false;
+        }
+
+        queue.node.skip();
+
+        return true;
     }
 
     pause(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         if (!queue) {
             return false;
@@ -84,7 +188,8 @@ export class MusicPlayer {
     }
 
     resume(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         if (!queue) {
             return false;
@@ -94,13 +199,16 @@ export class MusicPlayer {
     }
 
     stop(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         if (!queue) {
             return false;
         }
 
-        return queue.delete();
+        queue.delete();
+
+        return true;
     }
 
     destroy(guildId) {
@@ -108,7 +216,8 @@ export class MusicPlayer {
     }
 
     isConnected(guildId) {
-        const queue = this.getQueue(guildId);
+        const queue =
+            this.getQueue(guildId);
 
         return Boolean(queue);
     }
