@@ -9,17 +9,23 @@ import {
 
 export class MusicPlayer {
     constructor(client) {
-        this.player = new Player(client);
+        this.player =
+            new Player(client);
+
+        /*
+         * Cola interna de operaciones de reproducción.
+         *
+         * Esto evita que varios -play simultáneos
+         * intenten modificar la misma Discord Player Queue
+         * al mismo tiempo.
+         */
+        this.playLocks =
+            new Map();
 
         this.setupEvents();
     }
 
     setupEvents() {
-        /*
-         * ─────────────────────────────
-         * CUANDO EMPIEZA A REPRODUCIR
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'playerStart',
             (queue, track) => {
@@ -49,11 +55,6 @@ export class MusicPlayer {
             }
         );
 
-        /*
-         * ─────────────────────────────
-         * CUANDO SE AÑADE A LA COLA
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'audioTrackAdd',
             (queue, track) => {
@@ -83,11 +84,6 @@ export class MusicPlayer {
             }
         );
 
-        /*
-         * ─────────────────────────────
-         * CUANDO TERMINA UNA CANCIÓN
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'playerFinish',
             (queue, track) => {
@@ -97,11 +93,6 @@ export class MusicPlayer {
             }
         );
 
-        /*
-         * ─────────────────────────────
-         * ERROR GENERAL DEL REPRODUCTOR
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'error',
             (queue, error) => {
@@ -112,11 +103,6 @@ export class MusicPlayer {
             }
         );
 
-        /*
-         * ─────────────────────────────
-         * ERROR DURANTE LA REPRODUCCIÓN
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'playerError',
             (queue, error) => {
@@ -127,11 +113,6 @@ export class MusicPlayer {
             }
         );
 
-        /*
-         * ─────────────────────────────
-         * DESCONEXIÓN
-         * ─────────────────────────────
-         */
         this.player.events.on(
             'disconnect',
             queue => {
@@ -143,11 +124,72 @@ export class MusicPlayer {
     }
 
     /*
-     * ─────────────────────────────
-     * REPRODUCIR
-     * ─────────────────────────────
+     * Ejecuta las operaciones de un guild
+     * una por una.
      */
     async play(
+        voiceChannel,
+        query,
+        metadata = {}
+    ) {
+        const guildId =
+            voiceChannel.guild.id;
+
+        /*
+         * Obtenemos la operación anterior
+         * de este servidor.
+         */
+        const previous =
+            this.playLocks.get(guildId) ||
+            Promise.resolve();
+
+        /*
+         * Creamos la siguiente operación.
+         */
+        const current =
+            previous
+                .catch(() => {})
+                .then(
+                    async () => {
+                        return this.executePlay(
+                            voiceChannel,
+                            query,
+                            metadata
+                        );
+                    }
+                );
+
+        /*
+         * Guardamos la operación.
+         */
+        this.playLocks.set(
+            guildId,
+            current
+        );
+
+        try {
+            return await current;
+        } finally {
+            /*
+             * Solo eliminamos el lock si esta
+             * sigue siendo la última operación.
+             */
+            if (
+                this.playLocks.get(
+                    guildId
+                ) === current
+            ) {
+                this.playLocks.delete(
+                    guildId
+                );
+            }
+        }
+    }
+
+    /*
+     * Reproducción real.
+     */
+    async executePlay(
         voiceChannel,
         query,
         metadata = {}
@@ -163,62 +205,68 @@ export class MusicPlayer {
                     nodeOptions: {
                         metadata,
 
+                        /*
+                         * Nuestro voiceStateUpdate
+                         * controla cuándo sale el bot.
+                         */
                         leaveOnEmpty: false,
                         leaveOnEnd: false,
                         leaveOnStop: false,
 
+                        /*
+                         * Tiempo máximo para obtener
+                         * el stream.
+                         */
                         bufferingTimeout: 15000,
 
-                        skipOnNoStream: true
+                        skipOnNoStream: true,
+
+                        /*
+                         * Configuración de audio.
+                         */
+                        volume: 100
                     }
                 }
             );
 
         if (result?.track) {
+            const track =
+                result.track;
+
             logger.info(
-                `Track encontrado: ${result.track.title}`
+                `Track encontrado: ${track.title}`
             );
 
             logger.info(
-                `Fuente: ${result.track.source}`
+                `Fuente: ${track.source}`
             );
 
             logger.info(
-                `Extractor: ${result.track.extractor}`
+                `Extractor: ${track.extractor}`
             );
 
             logger.info(
-                `URL: ${result.track.url}`
+                `URL: ${track.url}`
             );
 
             logger.info(
-                `Duración: ${result.track.duration}`
+                `Duración: ${track.duration}`
             );
 
             logger.info(
-                `Duración MS: ${result.track.durationMS}`
+                `Duración MS: ${track.durationMS}`
             );
         }
 
         return result;
     }
 
-    /*
-     * ─────────────────────────────
-     * OBTENER COLA
-     * ─────────────────────────────
-     */
     getQueue(guildId) {
         return this.player.nodes.get(
             guildId
         );
     }
 
-    /*
-     * ─────────────────────────────
-     * CANCIÓN ACTUAL
-     * ─────────────────────────────
-     */
     getCurrentTrack(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -226,11 +274,6 @@ export class MusicPlayer {
         return queue?.currentTrack ?? null;
     }
 
-    /*
-     * ─────────────────────────────
-     * CANCIONES EN COLA
-     * ─────────────────────────────
-     */
     getTracks(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -238,11 +281,6 @@ export class MusicPlayer {
         return queue?.tracks.toArray() ?? [];
     }
 
-    /*
-     * ─────────────────────────────
-     * TAMAÑO DE LA COLA
-     * ─────────────────────────────
-     */
     getQueueSize(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -250,11 +288,6 @@ export class MusicPlayer {
         return queue?.tracks.size ?? 0;
     }
 
-    /*
-     * ─────────────────────────────
-     * ¿ESTÁ REPRODUCIENDO?
-     * ─────────────────────────────
-     */
     isPlaying(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -266,11 +299,6 @@ export class MusicPlayer {
         return queue.node.isPlaying();
     }
 
-    /*
-     * ─────────────────────────────
-     * ¿ESTÁ PAUSADO?
-     * ─────────────────────────────
-     */
     isPaused(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -282,11 +310,6 @@ export class MusicPlayer {
         return queue.node.isPaused();
     }
 
-    /*
-     * ─────────────────────────────
-     * SKIP
-     * ─────────────────────────────
-     */
     skip(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -304,11 +327,6 @@ export class MusicPlayer {
         return true;
     }
 
-    /*
-     * ─────────────────────────────
-     * PAUSAR
-     * ─────────────────────────────
-     */
     pause(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -320,11 +338,6 @@ export class MusicPlayer {
         return queue.node.setPaused(true);
     }
 
-    /*
-     * ─────────────────────────────
-     * REANUDAR
-     * ─────────────────────────────
-     */
     resume(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -336,11 +349,6 @@ export class MusicPlayer {
         return queue.node.setPaused(false);
     }
 
-    /*
-     * ─────────────────────────────
-     * DETENER
-     * ─────────────────────────────
-     */
     stop(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -354,20 +362,10 @@ export class MusicPlayer {
         return true;
     }
 
-    /*
-     * ─────────────────────────────
-     * DESTRUIR COLA
-     * ─────────────────────────────
-     */
     destroy(guildId) {
         return this.stop(guildId);
     }
 
-    /*
-     * ─────────────────────────────
-     * ¿ESTÁ CONECTADO?
-     * ─────────────────────────────
-     */
     isConnected(guildId) {
         const queue =
             this.getQueue(guildId);
