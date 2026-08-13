@@ -7,7 +7,7 @@ import {
 import ffmpegPath from 'ffmpeg-static';
 
 import {
-    YTDLP
+    YtDlp
 } from 'ytdlp-nodejs';
 
 export async function registerYouTubeExtractor(player) {
@@ -17,21 +17,12 @@ export async function registerYouTubeExtractor(player) {
         );
     }
 
-    /*
-     * Configurar FFmpeg
-     */
-    setFFmpegPath(
-        ffmpegPath
-    );
+    setFFmpegPath(ffmpegPath);
 
-    /*
-     * Inicializar yt-dlp
-     */
-    const ytdlp =
-        new YTDLP();
+    const ytdlp = new YtDlp();
 
     const ytDlpPath =
-        await ytdlp.getBinaryPath();
+        ytdlp.binaryPath;
 
     if (!ytDlpPath) {
         throw new Error(
@@ -39,12 +30,7 @@ export async function registerYouTubeExtractor(player) {
         );
     }
 
-    /*
-     * Configurar yt-dlp
-     */
-    setYtDlpPath(
-        ytDlpPath
-    );
+    setYtDlpPath(ytDlpPath);
 
     console.log(
         `[YouTube] yt-dlp: ${ytDlpPath}`
@@ -54,26 +40,18 @@ export async function registerYouTubeExtractor(player) {
         `[YouTube] FFmpeg: ${ffmpegPath}`
     );
 
-    /*
-     * Registrar extractor
-     */
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
             searchLimit: 5,
-
             playlistSearchLimit: 200,
-
             relatedLimit: 5,
 
             enableProtocols: true,
 
             searchTimeoutMs: 10000,
-
             videoTimeoutMs: 15000,
-
             playlistTimeoutMs: 30000,
-
             ytdlpTimeoutMs: 30000,
 
             infoCacheTtlMs: 120000,
