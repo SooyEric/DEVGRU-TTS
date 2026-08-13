@@ -11,15 +11,30 @@ import {
 } from 'ytdlp-nodejs';
 
 export async function registerYouTubeExtractor(player) {
+    /*
+     * ─────────────────────────────
+     * FFmpeg
+     * ─────────────────────────────
+     */
+
     if (!ffmpegPath) {
         throw new Error(
             'No se encontró FFmpeg.'
         );
     }
 
-    setFFmpegPath(ffmpegPath);
+    setFFmpegPath(
+        ffmpegPath
+    );
 
-    const ytdlp = new YtDlp();
+    /*
+     * ─────────────────────────────
+     * yt-dlp
+     * ─────────────────────────────
+     */
+
+    const ytdlp =
+        new YtDlp();
 
     const ytDlpPath =
         ytdlp.binaryPath;
@@ -30,7 +45,9 @@ export async function registerYouTubeExtractor(player) {
         );
     }
 
-    setYtDlpPath(ytDlpPath);
+    setYtDlpPath(
+        ytDlpPath
+    );
 
     console.log(
         `[YouTube] yt-dlp: ${ytDlpPath}`
@@ -40,23 +57,53 @@ export async function registerYouTubeExtractor(player) {
         `[YouTube] FFmpeg: ${ffmpegPath}`
     );
 
+    /*
+     * ─────────────────────────────
+     * Registrar extractor
+     * ─────────────────────────────
+     */
+
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
+            /*
+             * Búsquedas
+             */
             searchLimit: 5,
+
             playlistSearchLimit: 200,
+
             relatedLimit: 5,
 
+            /*
+             * Protocolos
+             */
             enableProtocols: true,
 
-            searchTimeoutMs: 10000,
-            videoTimeoutMs: 15000,
-            playlistTimeoutMs: 30000,
-            ytdlpTimeoutMs: 30000,
+            /*
+             * Timeouts
+             */
+            searchTimeoutMs: 15000,
 
+            videoTimeoutMs: 30000,
+
+            playlistTimeoutMs: 60000,
+
+            ytdlpTimeoutMs: 60000,
+
+            /*
+             * Cache de información
+             */
             infoCacheTtlMs: 120000,
 
+            /*
+             * Debug
+             */
             debug: true
         }
+    );
+
+    console.log(
+        '[YouTube] Extractor registrado correctamente.'
     );
 }
