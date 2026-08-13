@@ -1,4 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
+
 import { config } from '../utils/config.js';
 
 function createErrorEmbed(title, description) {
@@ -15,13 +16,6 @@ export function errorNoVoiceChannel() {
     );
 }
 
-export function errorDifferentVoiceChannel() {
-    return createErrorEmbed(
-        'Canal de voz incorrecto',
-        'Debes estar en el mismo canal de voz que el bot para utilizar este comando.'
-    );
-}
-
 export function errorNoQuery() {
     return createErrorEmbed(
         'Falta la canción',
@@ -29,58 +23,30 @@ export function errorNoQuery() {
     );
 }
 
-export function errorNoResults() {
-    return createErrorEmbed(
-        'Sin resultados',
-        'No encontré ninguna canción que coincida con tu búsqueda.'
-    );
-}
-
 export function errorPlayback() {
     return createErrorEmbed(
         'Error de reproducción',
-        'No pude reproducir esa canción. Intenta nuevamente.'
-    );
-}
-
-export function errorTTSNoVoice() {
-    return createErrorEmbed(
-        'Canal de voz requerido',
-        'Debes estar conectado a un canal de voz para utilizar el TTS.'
-    );
-}
-
-export function errorTTS() {
-    return createErrorEmbed(
-        'Error de TTS',
-        'No pude generar el audio de ese mensaje. Intenta nuevamente.'
-    );
-}
-
-export function errorEmptyQueue() {
-    return createErrorEmbed(
-        'Cola vacía',
-        'No hay canciones en la cola actualmente.'
+        'No pude reproducir esa canción o archivo de audio.'
     );
 }
 
 export function errorNothingPlaying() {
     return createErrorEmbed(
-        'Nada reproduciéndose',
-        'No hay ninguna canción reproduciéndose actualmente.'
+        'Nada está reproduciéndose',
+        'Actualmente no hay ninguna canción reproduciéndose.'
     );
 }
 
 export function errorInvalidFile() {
     return createErrorEmbed(
-        'Archivo no compatible',
+        'Archivo no válido',
         'El archivo adjunto no es un formato de audio compatible.'
     );
 }
 
-export function errorGeneric() {
+export function errorNotFound() {
     return createErrorEmbed(
-        'Ha ocurrido un error',
-        'Ocurrió un error inesperado. Intenta nuevamente.'
+        'No encontrado',
+        'No pude encontrar resultados para tu búsqueda.'
     );
 }
