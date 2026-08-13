@@ -1,78 +1,25 @@
 export class MusicQueue {
-    constructor(guildId) {
-        this.guildId = guildId;
-
-        this.current = null;
-        this.tracks = [];
+    constructor(player) {
+        this.player = player;
     }
 
-    add(track) {
-        if (!track) {
-            return false;
-        }
-
-        this.tracks.push(track);
-
-        return true;
+    get(guildId) {
+        return this.player.getQueue(guildId);
     }
 
-    addMany(tracks) {
-        if (!Array.isArray(tracks) || tracks.length === 0) {
-            return 0;
-        }
-
-        const validTracks = tracks.filter(Boolean);
-
-        this.tracks.push(...validTracks);
-
-        return validTracks.length;
+    getTracks(guildId) {
+        return this.player.getTracks(guildId);
     }
 
-    next() {
-        return this.tracks.shift() || null;
+    getSize(guildId) {
+        return this.player.getQueueSize(guildId);
     }
 
-    peek() {
-        return this.tracks[0] || null;
+    getCurrent(guildId) {
+        return this.player.getCurrentTrack(guildId);
     }
 
-    remove(index) {
-        if (
-            !Number.isInteger(index) ||
-            index < 0 ||
-            index >= this.tracks.length
-        ) {
-            return null;
-        }
-
-        return this.tracks.splice(index, 1)[0] || null;
-    }
-
-    clear() {
-        this.tracks = [];
-    }
-
-    setCurrent(track) {
-        this.current = track || null;
-    }
-
-    getCurrent() {
-        return this.current;
-    }
-
-    get size() {
-        return this.tracks.length;
-    }
-
-    get isEmpty() {
-        return this.tracks.length === 0;
-    }
-
-    get all() {
-        return [...this.tracks];
-    }
-
-    hasTracks() {
-        return this.tracks.length > 0;
+    isPlaying(guildId) {
+        return this.player.isPlaying(guildId);
     }
 }
