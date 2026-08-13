@@ -1,47 +1,53 @@
 import {
     AudioPlayerStatus,
     NoSubscriberBehavior,
+    VoiceConnectionStatus,
     createAudioPlayer,
     createAudioResource,
-    joinVoiceChannel,
-    VoiceConnectionStatus,
-    entersState
+    entersState,
+    joinVoiceChannel
 } from '@discordjs/voice';
 
-import { createReadStream } from 'node:fs';
-import { deleteTTSDirectory } from './engine.js';
-import { logger } from '../utils/logger.js';
+import {
+    createReadStream
+} from 'node:fs';
+
+import {
+    deleteTTSFile
+} from './engine.js';
 
 export class TTSPlayer {
     constructor() {
-        this.players = new Map();
         this.connections = new Map();
+        this.players = new Map();
     }
 
     async connect(voiceChannel) {
-        if (!voiceChannel) {
-            throw new Error('No se proporcionó un canal de voz.');
-        }
-
         const guildId = voiceChannel.guild.id;
 
-        const existingConnection = this.connections.get(guildId);
+        const existing =
+            this.connections.get(guildId);
 
-        if (existingConnection) {
-            const currentChannelId = existingConnection.joinConfig.channelId;
+        if (existing) {
+            const currentChannel =
+                existing.joinConfig.channelId;
 
-            if (currentChannelId === voiceChannel.id) {
-                return existingConnection;
+            if (
+                currentChannel === voiceChannel.id
+            ) {
+                return existing;
             }
 
-            existingConnection.destroy();
+            existing.destroy();
             this.connections.delete(guildId);
         }
 
         const connection = joinVoiceChannel({
             channelId: voiceChannel.id,
-            guildId: voiceChannel.guild.id,
-            adapterCreator: voiceChannel.guild.voiceAdapterCreator,
+            guildId,
+            adapterCreator:
+                voiceChannel.guild
+                    .voiceAdapterCreator,
             selfDeaf: true,
             selfMute: false
         });
@@ -54,105 +60,108 @@ export class TTSPlayer {
             );
         } catch (error) {
             connection.destroy();
-
-            throw new Error(
-                `No se pudo conectar al canal de voz: ${error.message}`
-            );
+            throw error;
         }
 
-        this.connections.set(guildId, connection);
+        this.connections.set(
+            guildId,
+            connection
+        );
 
         return connection;
     }
 
     getPlayer(guildId) {
-        let player = this.players.get(guildId);
+        let player =
+            this.players.get(guildId);
 
-        if (!player) {
-            player = createAudioPlayer({
-                behaviors: {
-                    noSubscriber: NoSubscriberBehavior.Stop
-                }
-            });
-
-            this.players.set(guildId, player);
+        if (player) {
+            return player;
         }
+
+        player = createAudioPlayer({
+            behaviors: {
+                noSubscriber:
+                    NoSubscriberBehavior.Stop
+            }
+        });
+
+        this.players.set(
+            guildId,
+            player
+        );
 
         return player;
     }
 
-    async play(voiceChannel, audioPath) {
-        if (!audioPath) {
-            throw new Error('No se proporcionó un archivo TTS.');
-        }
+    async play(voiceChannel, filePath) {
+        const guildId =
+            voiceChannel.guild.id;
 
-        const guildId = voiceChannel.guild.id;
+        const connection =
+            await this.connect(voiceChannel);
 
-        const connection = await this.connect(voiceChannel);
-        const player = this.getPlayer(guildId);
+        const player =
+            this.getPlayer(guildId);
 
         connection.subscribe(player);
 
-        const resource = createAudioResource(
-            createReadStream(audioPath),
-            {
-                inlineVolume: false
-            }
-        );
-
-        return new Promise((resolve, reject) => {
-            let finished = false;
-
-            const cleanup = async () => {
-                if (finished) {
-                    return;
+        const resource =
+            createAudioResource(
+                createReadStream(filePath),
+                {
+                    metadata: {
+                        filePath
+                    }
                 }
+            );
 
-                finished = true;
+        return new Promise(
+            (resolve, reject) => {
+                const cleanup = async () => {
+                    player.removeListener(
+                        AudioPlayerStatus.Idle,
+                        onIdle
+                    );
 
-                player.removeListener(
+                    player.removeListener(
+                        'error',
+                        onError
+                    );
+
+                    await deleteTTSFile(
+                        filePath
+                    );
+                };
+
+                const onIdle = async () => {
+                    await cleanup();
+                    resolve();
+                };
+
+                const onError = async error => {
+                    await cleanup();
+                    reject(error);
+                };
+
+                player.once(
                     AudioPlayerStatus.Idle,
                     onIdle
                 );
 
-                player.removeListener(
+                player.once(
                     'error',
                     onError
                 );
 
-                await deleteTTSDirectory(audioPath);
-            };
-
-            const onIdle = async () => {
-                await cleanup();
-                resolve();
-            };
-
-            const onError = async error => {
-                await cleanup();
-                reject(error);
-            };
-
-            player.once(
-                AudioPlayerStatus.Idle,
-                onIdle
-            );
-
-            player.once(
-                'error',
-                onError
-            );
-
-            player.play(resource);
-
-            logger.info(
-                `Reproduciendo TTS en ${voiceChannel.name}.`
-            );
-        });
+                player.play(resource);
+            }
+        );
     }
 
     stop(guildId) {
-        const player = this.players.get(guildId);
+        const player =
+            this.players.get(guildId);
 
         if (!player) {
             return false;
@@ -164,22 +173,17 @@ export class TTSPlayer {
     }
 
     disconnect(guildId) {
-        const connection = this.connections.get(guildId);
+        const connection =
+            this.connections.get(guildId);
 
-        if (!connection) {
-            return false;
+        if (connection) {
+            connection.destroy();
         }
-
-        connection.destroy();
 
         this.connections.delete(guildId);
         this.players.delete(guildId);
 
         return true;
-    }
-
-    getConnection(guildId) {
-        return this.connections.get(guildId) || null;
     }
 
     isConnected(guildId) {
