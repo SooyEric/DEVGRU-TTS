@@ -4,50 +4,50 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 
-const TTS_LANGUAGE = 'es';
-const TTS_SPEED = 1.0;
+const LANGUAGE = 'es';
 
 export async function generateTTS(text) {
-    if (!text || !text.trim()) {
-        throw new Error('No se proporcionó texto para TTS.');
-    }
-
     const cleanText = text.trim();
 
-    const parts = googleTTS.getAllAudioBase64(cleanText, {
-        lang: TTS_LANGUAGE,
-        slow: false,
-        host: 'https://translate.google.com'
-    });
-
-    if (!parts || parts.length === 0) {
-        throw new Error('No se pudo generar el audio TTS.');
+    if (!cleanText) {
+        throw new Error('El texto está vacío.');
     }
 
-    const tempDirectory = await fs.mkdtemp(
+    const audioParts = await googleTTS.getAllAudioBase64(
+        cleanText,
+        {
+            lang: LANGUAGE,
+            slow: false,
+            host: 'https://translate.google.com',
+            timeout: 15000
+        }
+    );
+
+    if (!audioParts?.length) {
+        throw new Error(
+            'No se pudo generar el audio TTS.'
+        );
+    }
+
+    const directory = await fs.mkdtemp(
         path.join(os.tmpdir(), 'devgru-tts-')
     );
 
-    const outputPath = path.join(
-        tempDirectory,
+    const filePath = path.join(
+        directory,
         `${crypto.randomUUID()}.mp3`
     );
 
-    const buffers = parts.map(part =>
-        Buffer.from(part.base64, 'base64')
+    const buffers = audioParts.map(
+        part => Buffer.from(part.base64, 'base64')
     );
 
     await fs.writeFile(
-        outputPath,
+        filePath,
         Buffer.concat(buffers)
     );
 
-    return {
-        path: outputPath,
-        text: cleanText,
-        language: TTS_LANGUAGE,
-        speed: TTS_SPEED
-    };
+    return filePath;
 }
 
 export async function deleteTTSFile(filePath) {
@@ -59,24 +59,15 @@ export async function deleteTTSFile(filePath) {
         await fs.rm(filePath, {
             force: true
         });
+
+        await fs.rm(
+            path.dirname(filePath),
+            {
+                recursive: true,
+                force: true
+            }
+        );
     } catch {
-        // El archivo ya no existe o no pudo eliminarse.
-    }
-}
-
-export async function deleteTTSDirectory(filePath) {
-    if (!filePath) {
-        return;
-    }
-
-    try {
-        const directory = path.dirname(filePath);
-
-        await fs.rm(directory, {
-            recursive: true,
-            force: true
-        });
-    } catch {
-        // El directorio ya no existe o no pudo eliminarse.
+        // El archivo ya fue eliminado.
     }
 }
