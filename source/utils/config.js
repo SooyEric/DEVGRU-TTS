@@ -1,7 +1,11 @@
-export const config = {
-    prefix: '-',
-    language: 'es',
-    color: 0xFFAF1A,
+import 'dotenv/config';
 
-    ttsChannelId: process.env.TTS_CHANNEL_ID
+export const config = {
+    token: process.env.DISCORD_TOKEN,
+
+    prefix: '-',
+
+    ttsChannelId: process.env.TTS_CHANNEL_ID,
+
+    color: 0xFFAF1A
 };
