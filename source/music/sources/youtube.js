@@ -59,6 +59,74 @@ export async function registerYouTubeExtractor(player) {
 
     /*
      * ─────────────────────────────
+     * Cookies de YouTube
+     * ─────────────────────────────
+     *
+     * Railway proporciona las cookies
+     * mediante una variable de entorno.
+     *
+     * NUNCA poner las cookies directamente
+     * en este archivo ni subirlas a GitHub.
+     */
+
+    const youtubeCookies =
+        process.env.YOUTUBE_COOKIES?.trim();
+
+    if (youtubeCookies) {
+        console.log(
+            '[YouTube] Cookies configuradas.'
+        );
+    } else {
+        console.warn(
+            '[YouTube] YOUTUBE_COOKIES no está configurado. ' +
+            'YouTube puede rechazar las solicitudes de yt-dlp.'
+        );
+    }
+
+    /*
+     * ─────────────────────────────
+     * Configuración del agente
+     * ─────────────────────────────
+     */
+
+    const agent = {
+        /*
+         * Cookie header proporcionado
+         * desde Railway.
+         */
+        cookiesHeader:
+            youtubeCookies || undefined,
+
+        /*
+         * Railway utiliza una IP de servidor.
+         * IPv4 puede ser más estable para
+         * determinadas rutas de YouTube.
+         */
+        forceIPv4: true,
+
+        /*
+         * No intentamos obtener cookies
+         * desde Chrome/Firefox del servidor,
+         * porque Railway no tiene nuestro
+         * navegador local.
+         */
+        autoCookiesFromBrowser: false,
+
+        cookiesFromBrowser:
+            undefined,
+
+        cookiesFile:
+            undefined,
+
+        cookiesJsonPath:
+            undefined,
+
+        noUA:
+            false
+    };
+
+    /*
+     * ─────────────────────────────
      * Registrar extractor
      * ─────────────────────────────
      */
@@ -66,8 +134,10 @@ export async function registerYouTubeExtractor(player) {
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
+            agent,
+
             /*
-             * Búsquedas
+             * Búsqueda
              */
             searchLimit: 5,
 
@@ -92,7 +162,7 @@ export async function registerYouTubeExtractor(player) {
             ytdlpTimeoutMs: 60000,
 
             /*
-             * Cache de información
+             * Cache
              */
             infoCacheTtlMs: 120000,
 
