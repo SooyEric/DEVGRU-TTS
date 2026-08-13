@@ -1,147 +1,74 @@
-const SUPPORTED_AUDIO_EXTENSIONS = [
-    '.mp3',
-    '.wav',
-    '.ogg',
-    '.oga',
-    '.flac',
-    '.m4a',
-    '.aac',
-    '.webm'
+const AUDIO_EXTENSIONS = [
+    'mp3',
+    'wav',
+    'ogg',
+    'oga',
+    'flac',
+    'm4a',
+    'aac',
+    'opus',
+    'webm'
 ];
-
-const SOURCE_PATTERNS = {
-    youtube: [
-        /^(https?:\/\/)?(www\.)?(youtube\.com|youtu\.be)\//i
-    ],
-
-    spotify: [
-        /^(https?:\/\/)?open\.spotify\.com\//i
-    ],
-
-    soundcloud: [
-        /^(https?:\/\/)?(www\.)?soundcloud\.com\//i
-    ],
-
-    applemusic: [
-        /^(https?:\/\/)?music\.apple\.com\//i
-    ]
-};
-
-export function parseCommand(content, prefix = '-') {
-    if (!content || !content.startsWith(prefix)) {
-        return null;
-    }
-
-    const withoutPrefix = content.slice(prefix.length).trim();
-
-    if (!withoutPrefix) {
-        return null;
-    }
-
-    const parts = withoutPrefix.split(/\s+/);
-
-    const command = parts.shift().toLowerCase();
-
-    return {
-        command,
-        args: parts,
-        raw: parts.join(' ')
-    };
-}
-
-export function parsePlayInput(input) {
-    if (!input || !input.trim()) {
-        return {
-            type: 'empty',
-            value: null
-        };
-    }
-
-    const value = input.trim();
-
-    const source = detectSource(value);
-
-    if (source) {
-        return {
-            type: 'url',
-            source,
-            value
-        };
-    }
-
-    if (isDirectAudioUrl(value)) {
-        return {
-            type: 'audio-url',
-            source: 'direct',
-            value
-        };
-    }
-
-    return {
-        type: 'search',
-        source: 'search',
-        value
-    };
-}
-
-export function detectSource(url) {
-    for (const [source, patterns] of Object.entries(SOURCE_PATTERNS)) {
-        if (patterns.some(pattern => pattern.test(url))) {
-            return source;
-        }
-    }
-
-    return null;
-}
-
-export function isDirectAudioUrl(url) {
-    try {
-        const parsed = new URL(url);
-        const pathname = parsed.pathname.toLowerCase();
-
-        return SUPPORTED_AUDIO_EXTENSIONS.some(extension =>
-            pathname.endsWith(extension)
-        );
-    } catch {
-        return false;
-    }
-}
 
 export function getAttachmentAudio(attachments) {
     if (!attachments || attachments.size === 0) {
         return null;
     }
 
-    const attachment = attachments.find(file => {
-        const extension = getFileExtension(file.name);
+    for (const attachment of attachments.values()) {
+        const extension = getExtension(
+            attachment.name
+        );
 
-        return SUPPORTED_AUDIO_EXTENSIONS.includes(extension);
-    });
-
-    if (!attachment) {
-        return null;
+        if (
+            AUDIO_EXTENSIONS.includes(
+                extension
+            )
+        ) {
+            return attachment;
+        }
     }
 
-    return {
-        type: 'attachment',
-        source: 'discord',
-        name: attachment.name,
-        url: attachment.url,
-        size: attachment.size,
-        contentType: attachment.contentType || null
-    };
+    return null;
 }
 
-export function getFileExtension(filename) {
+export function getExtension(filename) {
     if (!filename) {
         return '';
     }
 
-    const lastDot = filename.lastIndexOf('.');
+    const parts = filename
+        .toLowerCase()
+        .split('.');
 
-    if (lastDot === -1) {
+    if (parts.length < 2) {
         return '';
     }
 
-    return filename.slice(lastDot).toLowerCase();
+    return parts.pop();
+}
+
+export function parseCommand(content, prefix = '-') {
+    if (!content.startsWith(prefix)) {
+        return null;
+    }
+
+    const input = content
+        .slice(prefix.length)
+        .trim();
+
+    if (!input) {
+        return null;
+    }
+
+    const parts = input.split(/\s+/);
+
+    const command = parts
+        .shift()
+        .toLowerCase();
+
+    return {
+        command,
+        args: parts
+    };
 }
