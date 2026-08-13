@@ -1,30 +1,19 @@
 export class TTSQueue {
-    constructor(guildId) {
-        this.guildId = guildId;
+    constructor() {
         this.items = [];
         this.processing = false;
     }
 
     add(item) {
-        if (!item) {
-            return false;
-        }
-
         this.items.push(item);
-
-        return true;
     }
 
     next() {
         return this.items.shift() || null;
     }
 
-    peek() {
-        return this.items[0] || null;
-    }
-
     clear() {
-        this.items = [];
+        this.items.length = 0;
     }
 
     get size() {
@@ -40,10 +29,6 @@ export class TTSQueue {
     }
 
     setProcessing(value) {
-        this.processing = Boolean(value);
-    }
-
-    get all() {
-        return [...this.items];
+        this.processing = value;
     }
 }
