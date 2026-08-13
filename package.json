@@ -1,1 +1,23 @@
-s
+{
+  "name": "devgru-tts",
+  "version": "1.0.0",
+  "description": "DEVGRU TTS - Discord Music and Text-to-Speech Bot",
+  "type": "module",
+  "main": "source/app.js",
+  "scripts": {
+    "start": "node source/app.js"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "dependencies": {
+    "@discord-player/extractor": "^7.2.0",
+    "@discordjs/voice": "^0.19.2",
+    "discord-player": "^7.2.0",
+    "discord-player-youtubedlp": "^1.0.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.2.1",
+    "ffmpeg-static": "^5.2.0",
+    "google-tts-api": "^2.0.2"
+  }
+}
