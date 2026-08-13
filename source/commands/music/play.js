@@ -49,12 +49,28 @@ export async function execute(
         });
     }
 
+    const guildId =
+        message.guild.id;
+
+    const wasPlaying =
+        musicManager.isPlaying(
+            guildId
+        );
+
+    const queueBefore =
+        musicManager.getQueueSize(
+            guildId
+        );
+
     try {
         const result =
             await musicManager.play(
                 voiceChannel,
                 query,
                 {
+                    channel:
+                        message.channel,
+
                     requestedBy:
                         message.author
                 }
@@ -71,30 +87,20 @@ export async function execute(
             });
         }
 
-        const guildId =
-            message.guild.id;
-
-        const queueSize =
-            musicManager.getQueueSize(
-                guildId
-            );
-
-        const isPlaying =
-            musicManager.isPlaying(
-                guildId
-            );
-
         /*
          * Si ya había una canción
-         * reproduciéndose, Discord Player
-         * añade la nueva a la cola.
+         * reproduciéndose, la nueva
+         * canción fue añadida a la cola.
          */
-        if (isPlaying && queueSize > 0) {
+        if (wasPlaying || queueBefore > 0) {
+            const position =
+                queueBefore + 1;
+
             return message.reply({
                 embeds: [
                     createAddedToQueueEmbed(
                         track,
-                        queueSize,
+                        position,
                         message.author.username
                     )
                 ]
