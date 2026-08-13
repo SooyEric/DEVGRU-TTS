@@ -12,27 +12,37 @@ export default async function messageCreate(
         return;
     }
 
-    // ─────────────────────────────
-    // TTS
-    // ─────────────────────────────
+    /*
+     * ─────────────────────────────
+     * TTS
+     * ─────────────────────────────
+     */
 
     if (
         config.ttsChannelId &&
-        message.channel.id === config.ttsChannelId
+        message.channel.id ===
+            config.ttsChannelId
     ) {
-        await client.ttsManager.handleMessage(message);
+        await client.ttsManager
+            .handleMessage(message);
+
         return;
     }
 
-    // ─────────────────────────────
-    // Comandos
-    // ─────────────────────────────
+    /*
+     * ─────────────────────────────
+     * COMANDOS
+     * ─────────────────────────────
+     */
 
-    if (!message.content.startsWith(config.prefix)) {
+    if (
+        !message.content.startsWith(
+            config.prefix
+        )
+    ) {
         return;
     }
 
-    await client.commandHandler.handle(
-        message
-    );
+    await client.commandHandler
+        .handle(message);
 }
