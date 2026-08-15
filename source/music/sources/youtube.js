@@ -10,7 +10,29 @@ import {
     YtDlp
 } from 'ytdlp-nodejs';
 
+
+function convertCookiesToHeader(json) {
+    const cookies = JSON.parse(json);
+
+    if (!Array.isArray(cookies)) {
+        throw new Error(
+            'YOUTUBE_COOKIES no contiene un array de cookies válido.'
+        );
+    }
+
+    return cookies
+        .filter(cookie =>
+            cookie.domain?.includes('youtube.com')
+        )
+        .map(cookie =>
+            `${cookie.name}=${cookie.value}`
+        )
+        .join('; ');
+}
+
+
 export async function registerYouTubeExtractor(player) {
+
     /*
      * ─────────────────────────────
      * FFmpeg
@@ -26,6 +48,7 @@ export async function registerYouTubeExtractor(player) {
     setFFmpegPath(
         ffmpegPath
     );
+
 
     /*
      * ─────────────────────────────
@@ -49,6 +72,7 @@ export async function registerYouTubeExtractor(player) {
         ytDlpPath
     );
 
+
     console.log(
         `[YouTube] yt-dlp: ${ytDlpPath}`
     );
@@ -57,102 +81,72 @@ export async function registerYouTubeExtractor(player) {
         `[YouTube] FFmpeg: ${ffmpegPath}`
     );
 
+
     /*
      * ─────────────────────────────
-     * Cookies de YouTube
+     * COOKIES
      * ─────────────────────────────
-     *
-     * Railway proporciona las cookies
-     * mediante una variable de entorno.
-     *
-     * NUNCA poner las cookies directamente
-     * en este archivo ni subirlas a GitHub.
      */
 
-    const youtubeCookies =
-        process.env.YOUTUBE_COOKIES?.trim();
+    const cookiesJson =
+        process.env.YOUTUBE_COOKIES;
 
-    if (youtubeCookies) {
-        console.log(
-            '[YouTube] Cookies configuradas.'
-        );
+    let cookiesHeader;
+
+
+    if (cookiesJson) {
+
+        try {
+
+            cookiesHeader =
+                convertCookiesToHeader(
+                    cookiesJson
+                );
+
+            console.log(
+                '[YouTube] Cookies cargadas correctamente.'
+            );
+
+        } catch (error) {
+
+            console.error(
+                '[YouTube] Error procesando YOUTUBE_COOKIES:',
+                error
+            );
+
+        }
+
     } else {
+
         console.warn(
-            '[YouTube] YOUTUBE_COOKIES no está configurado. ' +
-            'YouTube puede rechazar las solicitudes de yt-dlp.'
+            '[YouTube] YOUTUBE_COOKIES no está configurado.'
         );
+
     }
 
-    /*
-     * ─────────────────────────────
-     * Configuración del agente
-     * ─────────────────────────────
-     */
-
-    const agent = {
-        /*
-         * Cookie header proporcionado
-         * desde Railway.
-         */
-        cookiesHeader:
-            youtubeCookies || undefined,
-
-        /*
-         * Railway utiliza una IP de servidor.
-         * IPv4 puede ser más estable para
-         * determinadas rutas de YouTube.
-         */
-        forceIPv4: true,
-
-        /*
-         * No intentamos obtener cookies
-         * desde Chrome/Firefox del servidor,
-         * porque Railway no tiene nuestro
-         * navegador local.
-         */
-        autoCookiesFromBrowser: false,
-
-        cookiesFromBrowser:
-            undefined,
-
-        cookiesFile:
-            undefined,
-
-        cookiesJsonPath:
-            undefined,
-
-        noUA:
-            false
-    };
 
     /*
      * ─────────────────────────────
-     * Registrar extractor
+     * EXTRACTOR
      * ─────────────────────────────
      */
 
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
-            agent,
 
-            /*
-             * Búsqueda
-             */
+            agent: {
+                cookiesHeader
+            },
+
             searchLimit: 5,
 
             playlistSearchLimit: 200,
 
             relatedLimit: 5,
 
-            /*
-             * Protocolos
-             */
             enableProtocols: true,
 
-            /*
-             * Timeouts
-             */
             searchTimeoutMs: 15000,
 
             videoTimeoutMs: 30000,
@@ -161,17 +155,12 @@ export async function registerYouTubeExtractor(player) {
 
             ytdlpTimeoutMs: 60000,
 
-            /*
-             * Cache
-             */
             infoCacheTtlMs: 120000,
 
-            /*
-             * Debug
-             */
             debug: true
         }
     );
+
 
     console.log(
         '[YouTube] Extractor registrado correctamente.'
