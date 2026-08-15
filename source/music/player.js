@@ -12,13 +12,6 @@ export class MusicPlayer {
         this.player =
             new Player(client);
 
-        /*
-         * Cola interna de operaciones de reproducción.
-         *
-         * Esto evita que varios -play simultáneos
-         * intenten modificar la misma Discord Player Queue
-         * al mismo tiempo.
-         */
         this.playLocks =
             new Map();
 
@@ -32,26 +25,6 @@ export class MusicPlayer {
                 logger.info(
                     `▶️ Reproduciendo: ${track.title}`
                 );
-
-                logger.info(
-                    `Fuente: ${track.source}`
-                );
-
-                logger.info(
-                    `Extractor: ${track.extractor}`
-                );
-
-                logger.info(
-                    `URL: ${track.url}`
-                );
-
-                logger.info(
-                    `Duración: ${track.duration}`
-                );
-
-                logger.info(
-                    `Duración MS: ${track.durationMS}`
-                );
             }
         );
 
@@ -60,26 +33,6 @@ export class MusicPlayer {
             (queue, track) => {
                 logger.info(
                     `➕ Track añadido: ${track.title}`
-                );
-
-                logger.info(
-                    `Fuente: ${track.source}`
-                );
-
-                logger.info(
-                    `Extractor: ${track.extractor}`
-                );
-
-                logger.info(
-                    `URL: ${track.url}`
-                );
-
-                logger.info(
-                    `Duración: ${track.duration}`
-                );
-
-                logger.info(
-                    `Duración MS: ${track.durationMS}`
                 );
             }
         );
@@ -123,10 +76,6 @@ export class MusicPlayer {
         );
     }
 
-    /*
-     * Ejecuta las operaciones de un guild
-     * una por una.
-     */
     async play(
         voiceChannel,
         query,
@@ -135,33 +84,22 @@ export class MusicPlayer {
         const guildId =
             voiceChannel.guild.id;
 
-        /*
-         * Obtenemos la operación anterior
-         * de este servidor.
-         */
         const previous =
             this.playLocks.get(guildId) ||
             Promise.resolve();
 
-        /*
-         * Creamos la siguiente operación.
-         */
         const current =
             previous
                 .catch(() => {})
                 .then(
-                    async () => {
-                        return this.executePlay(
+                    () =>
+                        this.executePlay(
                             voiceChannel,
                             query,
                             metadata
-                        );
-                    }
+                        )
                 );
 
-        /*
-         * Guardamos la operación.
-         */
         this.playLocks.set(
             guildId,
             current
@@ -170,10 +108,6 @@ export class MusicPlayer {
         try {
             return await current;
         } finally {
-            /*
-             * Solo eliminamos el lock si esta
-             * sigue siendo la última operación.
-             */
             if (
                 this.playLocks.get(
                     guildId
@@ -186,9 +120,6 @@ export class MusicPlayer {
         }
     }
 
-    /*
-     * Reproducción real.
-     */
     async executePlay(
         voiceChannel,
         query,
@@ -205,56 +136,26 @@ export class MusicPlayer {
                     nodeOptions: {
                         metadata,
 
-                        /*
-                         * Nuestro voiceStateUpdate
-                         * controla cuándo sale el bot.
-                         */
                         leaveOnEmpty: false,
                         leaveOnEnd: false,
                         leaveOnStop: false,
 
-                        /*
-                         * Tiempo máximo para obtener
-                         * el stream.
-                         */
-                        bufferingTimeout: 15000,
+                        bufferingTimeout: 10000,
 
                         skipOnNoStream: true,
 
-                        /*
-                         * Configuración de audio.
-                         */
                         volume: 100
                     }
                 }
             );
 
         if (result?.track) {
-            const track =
-                result.track;
-
             logger.info(
-                `Track encontrado: ${track.title}`
+                `Track encontrado: ${result.track.title}`
             );
 
             logger.info(
-                `Fuente: ${track.source}`
-            );
-
-            logger.info(
-                `Extractor: ${track.extractor}`
-            );
-
-            logger.info(
-                `URL: ${track.url}`
-            );
-
-            logger.info(
-                `Duración: ${track.duration}`
-            );
-
-            logger.info(
-                `Duración MS: ${track.durationMS}`
+                `Duración: ${result.track.duration}`
             );
         }
 
