@@ -139,23 +139,41 @@ export async function registerYouTubeExtractor(player) {
                 cookiesHeader
             },
 
+            /*
+             * Búsqueda
+             */
             searchLimit: 5,
 
             playlistSearchLimit: 200,
 
             relatedLimit: 5,
 
+            /*
+             * Protocolos
+             */
             enableProtocols: true,
 
-            searchTimeoutMs: 15000,
+            /*
+             * Timeouts optimizados
+             */
 
-            videoTimeoutMs: 30000,
+            searchTimeoutMs: 6000,
 
-            playlistTimeoutMs: 60000,
+            videoTimeoutMs: 7000,
 
-            ytdlpTimeoutMs: 60000,
+            playlistTimeoutMs: 25000,
+
+            ytdlpTimeoutMs: 25000,
+
+            /*
+             * Cache de información
+             */
 
             infoCacheTtlMs: 120000,
+
+            /*
+             * Debug
+             */
 
             debug: true
         }
