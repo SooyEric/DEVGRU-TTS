@@ -11,26 +11,6 @@ import {
 } from 'ytdlp-nodejs';
 
 
-function convertCookiesToHeader(json) {
-    const cookies = JSON.parse(json);
-
-    if (!Array.isArray(cookies)) {
-        throw new Error(
-            'YOUTUBE_COOKIES no contiene un array de cookies válido.'
-        );
-    }
-
-    return cookies
-        .filter(cookie =>
-            cookie.domain?.includes('youtube.com')
-        )
-        .map(cookie =>
-            `${cookie.name}=${cookie.value}`
-        )
-        .join('; ');
-}
-
-
 export async function registerYouTubeExtractor(player) {
 
     if (!ffmpegPath) {
@@ -73,17 +53,23 @@ export async function registerYouTubeExtractor(player) {
     const cookiesJson =
         process.env.YOUTUBE_COOKIES;
 
-    let cookiesHeader;
+    let cookies;
 
 
     if (cookiesJson) {
 
         try {
 
-            cookiesHeader =
-                convertCookiesToHeader(
+            cookies =
+                JSON.parse(
                     cookiesJson
                 );
+
+            if (!Array.isArray(cookies)) {
+                throw new Error(
+                    'Las cookies deben ser un array.'
+                );
+            }
 
             console.log(
                 '[YouTube] Cookies cargadas correctamente.'
@@ -91,11 +77,9 @@ export async function registerYouTubeExtractor(player) {
 
         } catch (error) {
 
-            console.error(
-                '[YouTube] Error procesando YOUTUBE_COOKIES:',
-                error
+            throw new Error(
+                `Error procesando YOUTUBE_COOKIES: ${error.message}`
             );
-
         }
 
     } else {
@@ -110,9 +94,11 @@ export async function registerYouTubeExtractor(player) {
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
-            agent: {
-                cookiesHeader
-            },
+            agent: cookies
+                ? {
+                    cookies
+                }
+                : undefined,
 
             searchLimit: 1,
 
@@ -122,13 +108,13 @@ export async function registerYouTubeExtractor(player) {
 
             enableProtocols: true,
 
-            searchTimeoutMs: 10000,
+            searchTimeoutMs: 6000,
 
-            videoTimeoutMs: 15000,
+            videoTimeoutMs: 7000,
 
-            playlistTimeoutMs: 30000,
+            playlistTimeoutMs: 25000,
 
-            ytdlpTimeoutMs: 30000,
+            ytdlpTimeoutMs: 25000,
 
             infoCacheTtlMs: 600000,
 
