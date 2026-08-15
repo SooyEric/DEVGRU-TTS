@@ -9,8 +9,10 @@ import {
 
 export class MusicPlayer {
     constructor(client) {
-        this.player =
-            new Player(client);
+this.player =
+    new Player(client, {
+        skipFFmpeg: true
+    });
 
         this.playLocks =
             new Map();
