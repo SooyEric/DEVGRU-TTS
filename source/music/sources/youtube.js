@@ -33,12 +33,6 @@ function convertCookiesToHeader(json) {
 
 export async function registerYouTubeExtractor(player) {
 
-    /*
-     * ─────────────────────────────
-     * FFmpeg
-     * ─────────────────────────────
-     */
-
     if (!ffmpegPath) {
         throw new Error(
             'No se encontró FFmpeg.'
@@ -49,12 +43,6 @@ export async function registerYouTubeExtractor(player) {
         ffmpegPath
     );
 
-
-    /*
-     * ─────────────────────────────
-     * yt-dlp
-     * ─────────────────────────────
-     */
 
     const ytdlp =
         new YtDlp();
@@ -81,12 +69,6 @@ export async function registerYouTubeExtractor(player) {
         `[YouTube] FFmpeg: ${ffmpegPath}`
     );
 
-
-    /*
-     * ─────────────────────────────
-     * COOKIES
-     * ─────────────────────────────
-     */
 
     const cookiesJson =
         process.env.YOUTUBE_COOKIES;
@@ -125,57 +107,32 @@ export async function registerYouTubeExtractor(player) {
     }
 
 
-    /*
-     * ─────────────────────────────
-     * EXTRACTOR
-     * ─────────────────────────────
-     */
-
     await player.extractors.register(
         YouTubeDlpExtractor,
         {
-
             agent: {
                 cookiesHeader
             },
 
-            /*
-             * Búsqueda
-             */
-            searchLimit: 5,
+            searchLimit: 1,
 
-            playlistSearchLimit: 200,
+            playlistSearchLimit: 50,
 
-            relatedLimit: 5,
+            relatedLimit: 3,
 
-            /*
-             * Protocolos
-             */
             enableProtocols: true,
 
-            /*
-             * Timeouts optimizados
-             */
+            searchTimeoutMs: 10000,
 
-            searchTimeoutMs: 6000,
+            videoTimeoutMs: 15000,
 
-            videoTimeoutMs: 7000,
+            playlistTimeoutMs: 30000,
 
-            playlistTimeoutMs: 25000,
+            ytdlpTimeoutMs: 30000,
 
-            ytdlpTimeoutMs: 25000,
+            infoCacheTtlMs: 600000,
 
-            /*
-             * Cache de información
-             */
-
-            infoCacheTtlMs: 120000,
-
-            /*
-             * Debug
-             */
-
-            debug: true
+            debug: false
         }
     );
 
