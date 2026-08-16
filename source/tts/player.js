@@ -1,9 +1,5 @@
 import {
-    AudioPlayerStatus,
-    NoSubscriberBehavior,
     VoiceConnectionStatus,
-    createAudioPlayer,
-    createAudioResource,
     entersState,
     joinVoiceChannel
 } from '@discordjs/voice';
@@ -11,10 +7,6 @@ import {
 import {
     createReadStream
 } from 'node:fs';
-
-import {
-    PassThrough
-} from 'node:stream';
 
 import {
     spawn
@@ -30,8 +22,6 @@ import {
 export class TTSPlayer {
     constructor() {
         this.connections = new Map();
-        this.players = new Map();
-        this.mixers = new Map();
     }
 
 
@@ -40,7 +30,9 @@ export class TTSPlayer {
             voiceChannel.guild.id;
 
         const existing =
-            this.connections.get(guildId);
+            this.connections.get(
+                guildId
+            );
 
         if (existing) {
             const currentChannel =
@@ -85,6 +77,7 @@ export class TTSPlayer {
             );
         } catch (error) {
             connection.destroy();
+
             throw error;
         }
 
@@ -99,105 +92,25 @@ export class TTSPlayer {
     }
 
 
-    getPlayer(guildId) {
-        let player =
-            this.players.get(guildId);
-
-        if (player) {
-            return player;
-        }
-
-
-        player =
-            createAudioPlayer({
-                behaviors: {
-                    noSubscriber:
-                        NoSubscriberBehavior.Stop
-                }
-            });
-
-
-        this.players.set(
-            guildId,
-            player
-        );
-
-
-        return player;
-    }
-
-
-    getMixer(guildId) {
-        let mixer =
-            this.mixers.get(guildId);
-
-        if (mixer) {
-            return mixer;
-        }
-
-
-        mixer =
-            new PassThrough();
-
-
-        this.mixers.set(
-            guildId,
-            mixer
-        );
-
-
-        return mixer;
-    }
-
-
     async play(
         voiceChannel,
-        filePath
+        filePath,
+        mixer
     ) {
         const guildId =
             voiceChannel.guild.id;
 
 
-        const connection =
-            await this.connect(
-                voiceChannel
-            );
-
-
-        const player =
-            this.getPlayer(
-                guildId
-            );
-
-
-        connection.subscribe(
-            player
-        );
-
-
-        const mixer =
-            this.getMixer(
-                guildId
-            );
-
-
-        if (
-            player.state.status !==
-            AudioPlayerStatus.Playing
-        ) {
-            const resource =
-                createAudioResource(
-                    mixer,
-                    {
-                        inputType:
-                            'raw'
-                    }
-                );
-
-            player.play(
-                resource
+        if (!mixer) {
+            throw new Error(
+                'No se recibió un mixer de audio.'
             );
         }
+
+
+        await this.connect(
+            voiceChannel
+        );
 
 
         const ffmpeg =
@@ -286,7 +199,10 @@ export class TTSPlayer {
                     'error',
                     async error => {
                         await cleanup();
-                        reject(error);
+
+                        reject(
+                            error
+                        );
                     }
                 );
 
@@ -295,7 +211,10 @@ export class TTSPlayer {
                     'error',
                     async error => {
                         await cleanup();
-                        reject(error);
+
+                        reject(
+                            error
+                        );
                     }
                 );
 
@@ -329,18 +248,7 @@ export class TTSPlayer {
 
 
     stop(guildId) {
-        const player =
-            this.players.get(
-                guildId
-            );
-
-        if (!player) {
-            return false;
-        }
-
-        player.stop();
-
-        return true;
+        return false;
     }
 
 
@@ -357,14 +265,6 @@ export class TTSPlayer {
 
 
         this.connections.delete(
-            guildId
-        );
-
-        this.players.delete(
-            guildId
-        );
-
-        this.mixers.delete(
             guildId
         );
 
