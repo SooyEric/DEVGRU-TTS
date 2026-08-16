@@ -115,14 +115,8 @@ export class MusicManager {
         );
     }
 
-    getConnection(guildId) {
-        return this.player.getConnection(
-            guildId
-        );
-    }
-
-    getVoicePlayer(guildId) {
-        return this.player.getVoicePlayer(
+    getMixer(guildId) {
+        return this.player.getMixer(
             guildId
         );
     }
