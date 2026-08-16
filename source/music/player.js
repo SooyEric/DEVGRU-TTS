@@ -89,6 +89,10 @@ export class MusicPlayer {
                 logger.info(
                     `🔌 Música desconectada en ${queue.guild.id}.`
                 );
+
+                this.removeMixer(
+                    queue.guild.id
+                );
             }
         );
     }
@@ -96,7 +100,10 @@ export class MusicPlayer {
 
     getMixer(guildId) {
         let mixer =
-            this.mixers.get(guildId);
+            this.mixers.get(
+                guildId
+            );
+
 
         if (mixer) {
             return mixer;
@@ -119,13 +126,17 @@ export class MusicPlayer {
 
     removeMixer(guildId) {
         const mixer =
-            this.mixers.get(guildId);
+            this.mixers.get(
+                guildId
+            );
+
 
         if (mixer) {
             try {
-                mixer.end();
+                mixer.destroy();
             } catch {}
         }
+
 
         this.mixers.delete(
             guildId
@@ -143,7 +154,9 @@ export class MusicPlayer {
 
 
         const previous =
-            this.playLocks.get(guildId) ||
+            this.playLocks.get(
+                guildId
+            ) ||
             Promise.resolve();
 
 
@@ -191,6 +204,12 @@ export class MusicPlayer {
             voiceChannel.guild.id;
 
 
+        const mixer =
+            this.getMixer(
+                guildId
+            );
+
+
         const result =
             await this.player.play(
                 voiceChannel,
@@ -214,16 +233,8 @@ export class MusicPlayer {
 
                         onAfterCreateStream:
                             async (
-                                stream,
-                                queue
+                                stream
                             ) => {
-                                const id =
-                                    queue.guild.id;
-
-                                const mixer =
-                                    this.getMixer(
-                                        id
-                                    );
 
                                 stream.pipe(
                                     mixer,
@@ -232,8 +243,10 @@ export class MusicPlayer {
                                     }
                                 );
 
+
                                 return {
                                     stream: mixer,
+
                                     type:
                                         StreamType.Raw
                                 };
@@ -267,35 +280,48 @@ export class MusicPlayer {
 
     getCurrentTrack(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
 
-        return queue?.currentTrack ?? null;
+        return queue?.currentTrack ??
+            null;
     }
 
 
     getTracks(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
 
-        return queue?.tracks.toArray() ?? [];
+        return queue?.tracks.toArray() ??
+            [];
     }
 
 
     getQueueSize(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
 
-        return queue?.tracks.size ?? 0;
+        return queue?.tracks.size ??
+            0;
     }
 
 
     isPlaying(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
+
 
         return queue.node.isPlaying();
     }
@@ -303,11 +329,15 @@ export class MusicPlayer {
 
     isPaused(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
+
 
         return queue.node.isPaused();
     }
@@ -315,15 +345,22 @@ export class MusicPlayer {
 
     skip(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
 
-        if (!queue.node.isPlaying()) {
+
+        if (
+            !queue.node.isPlaying()
+        ) {
             return false;
         }
+
 
         queue.node.skip();
 
@@ -333,41 +370,58 @@ export class MusicPlayer {
 
     pause(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
 
-        return queue.node.setPaused(true);
+
+        return queue.node.setPaused(
+            true
+        );
     }
 
 
     resume(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
 
-        return queue.node.setPaused(false);
+
+        return queue.node.setPaused(
+            false
+        );
     }
 
 
     stop(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         if (!queue) {
             return false;
         }
+
 
         queue.delete();
 
         this.removeMixer(
             guildId
         );
+
 
         return true;
     }
@@ -389,7 +443,10 @@ export class MusicPlayer {
 
     isConnected(guildId) {
         const queue =
-            this.getQueue(guildId);
+            this.getQueue(
+                guildId
+            );
+
 
         return Boolean(queue);
     }
