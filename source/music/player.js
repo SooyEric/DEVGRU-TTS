@@ -1,24 +1,34 @@
 import {
     Player,
-    QueryType
+    QueryType,
+    StreamType
 } from 'discord-player';
 
 import {
     logger
 } from '../utils/logger.js';
 
+import {
+    PassThrough
+} from 'node:stream';
+
+
 export class MusicPlayer {
     constructor(client) {
-this.player =
-    new Player(client, {
-        skipFFmpeg: true
-    });
+        this.player =
+            new Player(client, {
+                skipFFmpeg: false
+            });
 
         this.playLocks =
             new Map();
 
+        this.mixers =
+            new Map();
+
         this.setupEvents();
     }
+
 
     setupEvents() {
         this.player.events.on(
@@ -30,6 +40,7 @@ this.player =
             }
         );
 
+
         this.player.events.on(
             'audioTrackAdd',
             (queue, track) => {
@@ -39,6 +50,7 @@ this.player =
             }
         );
 
+
         this.player.events.on(
             'playerFinish',
             (queue, track) => {
@@ -47,6 +59,7 @@ this.player =
                 );
             }
         );
+
 
         this.player.events.on(
             'error',
@@ -58,6 +71,7 @@ this.player =
             }
         );
 
+
         this.player.events.on(
             'playerError',
             (queue, error) => {
@@ -67,6 +81,7 @@ this.player =
                 );
             }
         );
+
 
         this.player.events.on(
             'disconnect',
@@ -78,6 +93,46 @@ this.player =
         );
     }
 
+
+    getMixer(guildId) {
+        let mixer =
+            this.mixers.get(guildId);
+
+        if (mixer) {
+            return mixer;
+        }
+
+
+        mixer =
+            new PassThrough();
+
+
+        this.mixers.set(
+            guildId,
+            mixer
+        );
+
+
+        return mixer;
+    }
+
+
+    removeMixer(guildId) {
+        const mixer =
+            this.mixers.get(guildId);
+
+        if (mixer) {
+            try {
+                mixer.end();
+            } catch {}
+        }
+
+        this.mixers.delete(
+            guildId
+        );
+    }
+
+
     async play(
         voiceChannel,
         query,
@@ -86,9 +141,11 @@ this.player =
         const guildId =
             voiceChannel.guild.id;
 
+
         const previous =
             this.playLocks.get(guildId) ||
             Promise.resolve();
+
 
         const current =
             previous
@@ -102,10 +159,12 @@ this.player =
                         )
                 );
 
+
         this.playLocks.set(
             guildId,
             current
         );
+
 
         try {
             return await current;
@@ -122,11 +181,16 @@ this.player =
         }
     }
 
+
     async executePlay(
         voiceChannel,
         query,
         metadata = {}
     ) {
+        const guildId =
+            voiceChannel.guild.id;
+
+
         const result =
             await this.player.play(
                 voiceChannel,
@@ -146,10 +210,38 @@ this.player =
 
                         skipOnNoStream: true,
 
-                        volume: 100
+                        volume: 100,
+
+                        onAfterCreateStream:
+                            async (
+                                stream,
+                                queue
+                            ) => {
+                                const id =
+                                    queue.guild.id;
+
+                                const mixer =
+                                    this.getMixer(
+                                        id
+                                    );
+
+                                stream.pipe(
+                                    mixer,
+                                    {
+                                        end: false
+                                    }
+                                );
+
+                                return {
+                                    stream: mixer,
+                                    type:
+                                        StreamType.Raw
+                                };
+                            }
                     }
                 }
             );
+
 
         if (result?.track) {
             logger.info(
@@ -161,14 +253,17 @@ this.player =
             );
         }
 
+
         return result;
     }
+
 
     getQueue(guildId) {
         return this.player.nodes.get(
             guildId
         );
     }
+
 
     getCurrentTrack(guildId) {
         const queue =
@@ -177,6 +272,7 @@ this.player =
         return queue?.currentTrack ?? null;
     }
 
+
     getTracks(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -184,12 +280,14 @@ this.player =
         return queue?.tracks.toArray() ?? [];
     }
 
+
     getQueueSize(guildId) {
         const queue =
             this.getQueue(guildId);
 
         return queue?.tracks.size ?? 0;
     }
+
 
     isPlaying(guildId) {
         const queue =
@@ -202,6 +300,7 @@ this.player =
         return queue.node.isPlaying();
     }
 
+
     isPaused(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -212,6 +311,7 @@ this.player =
 
         return queue.node.isPaused();
     }
+
 
     skip(guildId) {
         const queue =
@@ -230,6 +330,7 @@ this.player =
         return true;
     }
 
+
     pause(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -240,6 +341,7 @@ this.player =
 
         return queue.node.setPaused(true);
     }
+
 
     resume(guildId) {
         const queue =
@@ -252,6 +354,7 @@ this.player =
         return queue.node.setPaused(false);
     }
 
+
     stop(guildId) {
         const queue =
             this.getQueue(guildId);
@@ -262,12 +365,27 @@ this.player =
 
         queue.delete();
 
+        this.removeMixer(
+            guildId
+        );
+
         return true;
     }
 
+
     destroy(guildId) {
-        return this.stop(guildId);
+        return this.stop(
+            guildId
+        );
     }
+
+
+    getMixerStream(guildId) {
+        return this.getMixer(
+            guildId
+        );
+    }
+
 
     isConnected(guildId) {
         const queue =
