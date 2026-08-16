@@ -20,7 +20,5 @@
     "ffmpeg-static": "^5.2.0",
     "google-tts-api": "^2.0.2",
     "ytdlp-nodejs": "^3.4.1"
-    "@wetalabs/mixer": "^1.1.6"
-    npm install
   }
 }
