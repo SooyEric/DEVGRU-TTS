@@ -51,7 +51,9 @@ client.musicManager =
     new MusicManager(client);
 
 client.ttsManager =
-    new TTSManager();
+    new TTSManager(
+        client.musicManager
+    );
 
 client.once(
     'clientReady',
