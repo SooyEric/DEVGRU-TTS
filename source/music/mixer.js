@@ -1,19 +1,23 @@
 import {
     AudioPlayerStatus,
     NoSubscriberBehavior,
+    StreamType,
     createAudioPlayer,
     createAudioResource,
-    StreamType,
     joinVoiceChannel,
     entersState,
     VoiceConnectionStatus
 } from '@discordjs/voice';
 
+import {
+    PassThrough
+} from 'node:stream';
+
 export class AudioMixer {
     constructor() {
         this.connections = new Map();
         this.players = new Map();
-        this.resources = new Map();
+        this.streams = new Map();
     }
 
     async connect(voiceChannel) {
@@ -34,6 +38,7 @@ export class AudioMixer {
             }
 
             connection.destroy();
+
             this.connections.delete(
                 guildId
             );
@@ -54,11 +59,16 @@ export class AudioMixer {
                 selfMute: false
             });
 
-        await entersState(
-            connection,
-            VoiceConnectionStatus.Ready,
-            15_000
-        );
+        try {
+            await entersState(
+                connection,
+                VoiceConnectionStatus.Ready,
+                15_000
+            );
+        } catch (error) {
+            connection.destroy();
+            throw error;
+        }
 
         this.connections.set(
             guildId,
@@ -66,30 +76,6 @@ export class AudioMixer {
         );
 
         return connection;
-    }
-
-    getPlayer(guildId) {
-        let player =
-            this.players.get(guildId);
-
-        if (player) {
-            return player;
-        }
-
-        player =
-            createAudioPlayer({
-                behaviors: {
-                    noSubscriber:
-                        NoSubscriberBehavior.Play
-                }
-            });
-
-        this.players.set(
-            guildId,
-            player
-        );
-
-        return player;
     }
 
     async attach(voiceChannel) {
@@ -101,8 +87,23 @@ export class AudioMixer {
                 voiceChannel
             );
 
-        const player =
-            this.getPlayer(guildId);
+        let player =
+            this.players.get(guildId);
+
+        if (!player) {
+            player =
+                createAudioPlayer({
+                    behaviors: {
+                        noSubscriber:
+                            NoSubscriberBehavior.Play
+                    }
+                });
+
+            this.players.set(
+                guildId,
+                player
+            );
+        }
 
         connection.subscribe(
             player
@@ -114,51 +115,64 @@ export class AudioMixer {
         };
     }
 
-    play(
-        guildId,
-        stream,
-        options = {}
-    ) {
-        const player =
-            this.players.get(
-                guildId
-            );
+    createStream(guildId) {
+        let stream =
+            this.streams.get(guildId);
 
-        if (!player) {
-            throw new Error(
-                'El mixer no está conectado.'
-            );
+        if (stream) {
+            return stream;
         }
 
-        const resource =
-            createAudioResource(
-                stream,
-                {
-                    inputType:
-                        options.inputType ??
-                        StreamType.Raw,
+        stream =
+            new PassThrough();
 
-                    inlineVolume:
-                        options.inlineVolume ??
-                        false
-                }
-            );
-
-        this.resources.set(
+        this.streams.set(
             guildId,
-            resource
+            stream
         );
 
-        player.play(
-            resource
-        );
+        return stream;
+    }
 
-        return resource;
+    playStream(
+        voiceChannel,
+        stream
+    ) {
+        return this.attach(
+            voiceChannel
+        ).then(
+            ({ player }) => {
+                const guildId =
+                    voiceChannel.guild.id;
+
+                const resource =
+                    createAudioResource(
+                        stream,
+                        {
+                            inputType:
+                                StreamType.Raw
+                        }
+                    );
+
+                player.play(
+                    resource
+                );
+
+                this.streams.set(
+                    guildId,
+                    stream
+                );
+
+                return resource;
+            }
+        );
     }
 
     stop(guildId) {
         const player =
-            this.players.get(guildId);
+            this.players.get(
+                guildId
+            );
 
         if (!player) {
             return false;
@@ -166,23 +180,32 @@ export class AudioMixer {
 
         player.stop();
 
-        this.resources.delete(
-            guildId
-        );
-
         return true;
     }
 
     disconnect(guildId) {
         const player =
-            this.players.get(guildId);
+            this.players.get(
+                guildId
+            );
 
         if (player) {
             player.stop();
         }
 
+        const stream =
+            this.streams.get(
+                guildId
+            );
+
+        if (stream) {
+            stream.destroy();
+        }
+
         const connection =
-            this.connections.get(guildId);
+            this.connections.get(
+                guildId
+            );
 
         if (connection) {
             connection.destroy();
@@ -192,11 +215,11 @@ export class AudioMixer {
             guildId
         );
 
-        this.connections.delete(
+        this.streams.delete(
             guildId
         );
 
-        this.resources.delete(
+        this.connections.delete(
             guildId
         );
 
@@ -215,7 +238,7 @@ export class AudioMixer {
         );
     }
 
-    getPlayerInstance(guildId) {
+    getPlayer(guildId) {
         return this.players.get(
             guildId
         );
