@@ -32,7 +32,7 @@ export class TTSSystem {
 
     constructor(ttsChannelId) {
         this.ttsChannelId = ttsChannelId;
-    
+
         this.queues = new Map();
         this.connections = new Map();
         this.players = new Map();
@@ -41,23 +41,19 @@ export class TTSSystem {
         this.inactivityDisconnects = new Set();
     }
 
-
     async sendStatus(guild, text) {
         try {
             if (!this.ttsChannelId) {
                 return;
             }
-            
+
             const channel =
                 guild.channels.cache.get(
                     this.ttsChannelId
                 );
 
-            if (!channel) {
-                return;
-            }
-
             if (
+                !channel ||
                 !channel.isTextBased() ||
                 !channel.send
             ) {
@@ -76,7 +72,6 @@ export class TTSSystem {
 
         } catch {}
     }
-
 
     async handleMessage(message) {
         if (
@@ -136,7 +131,6 @@ export class TTSSystem {
         }
     }
 
-
     async processQueue(guildId) {
         const queue =
             this.queues.get(guildId);
@@ -167,7 +161,6 @@ export class TTSSystem {
             }
 
         } finally {
-
             queue.processing = false;
 
             if (
@@ -180,12 +173,10 @@ export class TTSSystem {
         }
     }
 
-
     async processItem(item) {
         let filePath = null;
 
         try {
-
             filePath =
                 await this.generateTTS(
                     item.text
@@ -212,7 +203,6 @@ export class TTSSystem {
             }
         }
     }
-
 
     async generateTTS(text) {
         const cleanText =
@@ -266,14 +256,11 @@ export class TTSSystem {
 
         await fs.writeFile(
             filePath,
-            Buffer.concat(
-                buffers
-            )
+            Buffer.concat(buffers)
         );
 
         return filePath;
     }
-
 
     async deleteTTSFile(filePath) {
         if (!filePath) {
@@ -281,7 +268,6 @@ export class TTSSystem {
         }
 
         try {
-
             await fs.rm(
                 filePath,
                 {
@@ -299,7 +285,6 @@ export class TTSSystem {
 
         } catch {}
     }
-
 
     async connect(voiceChannel) {
         const guildId =
@@ -390,7 +375,6 @@ export class TTSSystem {
         return connection;
     }
 
-
     async play(
         voiceChannel,
         filePath
@@ -471,7 +455,6 @@ export class TTSSystem {
                         } catch {}
 
                         try {
-
                             if (
                                 ffmpeg.exitCode ===
                                     null &&
@@ -479,7 +462,6 @@ export class TTSSystem {
                             ) {
                                 ffmpeg.kill();
                             }
-
                         } catch {}
 
                         try {
@@ -689,7 +671,6 @@ export class TTSSystem {
         );
     }
 
-
     stop(guildId) {
         const playback =
             this.activePlayback.get(
@@ -714,12 +695,9 @@ export class TTSSystem {
         return player.stop();
     }
 
-
     disconnect(guildId) {
         const queue =
-            this.queues.get(
-                guildId
-            );
+            this.queues.get(guildId);
 
         if (queue) {
             queue.items.length = 0;
@@ -732,9 +710,7 @@ export class TTSSystem {
         this.stop(guildId);
 
         const connection =
-            this.connections.get(
-                guildId
-            );
+            this.connections.get(guildId);
 
         if (connection) {
             connection.destroy();
@@ -751,298 +727,284 @@ export class TTSSystem {
         return true;
     }
 
-
     isConnected(guildId) {
         return this.connections.has(
             guildId
         );
     }
 
-
-handleVoiceStateUpdate(
-    oldState,
-    newState,
-    client
-) {
-    const guild =
-        newState.guild ||
-        oldState.guild;
-
-    if (!guild) {
-        return;
-    }
-
-    if (
-        oldState.id ===
-        client.user.id
+    handleVoiceStateUpdate(
+        oldState,
+        newState,
+        client
     ) {
-        const oldChannelId =
-            oldState.channelId;
+        const guild =
+            newState.guild ||
+            oldState.guild;
 
-        const newChannelId =
-            newState.channelId;
+        if (!guild) {
+            return;
+        }
 
         if (
-            oldState.serverMute !==
-            newState.serverMute ||
-            oldState.selfMute !==
-            newState.selfMute
+            oldState.id ===
+            client.user.id
         ) {
+            const oldChannelId =
+                oldState.channelId;
+
+            const newChannelId =
+                newState.channelId;
+
             if (
-                newState.serverMute ||
-                newState.selfMute
+                oldState.serverMute !==
+                    newState.serverMute ||
+                oldState.selfMute !==
+                    newState.selfMute
             ) {
+                if (
+                    newState.serverMute ||
+                    newState.selfMute
+                ) {
+                    this.sendStatus(
+                        guild,
+                        'Fui silenciado en el canal de voz.'
+                    );
+                }
+
+                return;
+            }
+
+            if (
+                oldChannelId ===
+                newChannelId
+            ) {
+                return;
+            }
+
+            if (
+                oldChannelId &&
+                newChannelId
+            ) {
+                const timer =
+                    this.leaveTimers.get(
+                        oldChannelId
+                    );
+
+                if (timer) {
+                    clearTimeout(timer);
+
+                    this.leaveTimers.delete(
+                        oldChannelId
+                    );
+                }
+
                 this.sendStatus(
                     guild,
-                    'Fui silenciado en el canal de voz.'
-                );
-            }
-
-            return;
-        }
-
-        if (
-            oldChannelId ===
-            newChannelId
-        ) {
-            return;
-        }
-
-        if (
-            oldChannelId &&
-            newChannelId
-        ) {
-            const timer =
-                this.leaveTimers.get(
-                    oldChannelId
-                );
-
-            if (timer) {
-                clearTimeout(timer);
-
-                this.leaveTimers.delete(
-                    oldChannelId
-                );
-            }
-
-            const connection =
-                this.connections.get(
-                    guild.id
-                );
-
-            if (connection) {
-                connection.destroy();
-            }
-
-            this.connections.delete(
-                guild.id
-            );
-
-            this.players.delete(
-                guild.id
-            );
-
-            this.sendStatus(
-                guild,
-                'Fui movido de canal de voz.'
-            );
-
-            return;
-        }
-
-        if (
-            oldChannelId &&
-            !newChannelId
-        ) {
-            const timer =
-                this.leaveTimers.get(
-                    oldChannelId
-                );
-
-            if (timer) {
-                clearTimeout(timer);
-
-                this.leaveTimers.delete(
-                    oldChannelId
-                );
-            }
-
-            if (
-                this.inactivityDisconnects.has(
-                    guild.id
-                )
-            ) {
-                this.inactivityDisconnects.delete(
-                    guild.id
-                );
-
-                this.disconnect(
-                    guild.id
+                    'Fui movido de canal de voz.'
                 );
 
                 return;
             }
 
-            this.disconnect(
-                guild.id
-            );
-
-            this.sendStatus(
-                guild,
-                'Fui desconectado del canal de voz.'
-            );
-
-            return;
-        }
-
-        return;
-    }
-
-    const botMember =
-        guild.members.me;
-
-    if (!botMember) {
-        return;
-    }
-
-    const botChannel =
-        botMember.voice.channel;
-
-    if (!botChannel) {
-        return;
-    }
-
-    const botChannelId =
-        botChannel.id;
-
-    if (
-        newState.channelId ===
-        botChannelId
-    ) {
-        const timer =
-            this.leaveTimers.get(
-                botChannelId
-            );
-
-        if (timer) {
-            clearTimeout(timer);
-
-            this.leaveTimers.delete(
-                botChannelId
-            );
-        }
-
-        return;
-    }
-
-    if (
-        oldState.channelId !==
-        botChannelId
-    ) {
-        return;
-    }
-
-    const member =
-        newState.member ||
-        oldState.member;
-
-    if (
-        !member ||
-        member.user.bot
-    ) {
-        return;
-    }
-
-    const humans =
-        botChannel.members.filter(
-            voiceMember =>
-                !voiceMember.user.bot
-        );
-
-    if (
-        humans.size > 0
-    ) {
-        return;
-    }
-
-    if (
-        this.leaveTimers.has(
-            botChannelId
-        )
-    ) {
-        return;
-    }
-
-    const timer =
-        setTimeout(
-            async () => {
-                this.leaveTimers.delete(
-                    botChannelId
-                );
-
-                const currentBotChannel =
-                    guild.members.me
-                        ?.voice.channel;
-
-                if (
-                    !currentBotChannel ||
-                    currentBotChannel.id !==
-                    botChannelId
-                ) {
-                    return;
-                }
-
-                const currentHumans =
-                    currentBotChannel.members.filter(
-                        voiceMember =>
-                            !voiceMember.user.bot
+            if (
+                oldChannelId &&
+                !newChannelId
+            ) {
+                const timer =
+                    this.leaveTimers.get(
+                        oldChannelId
                     );
 
-                if (
-                    currentHumans.size > 0
-                ) {
-                    return;
+                if (timer) {
+                    clearTimeout(timer);
+
+                    this.leaveTimers.delete(
+                        oldChannelId
+                    );
                 }
 
-                try {
-                    this.inactivityDisconnects.add(
+                if (
+                    this.inactivityDisconnects.has(
                         guild.id
-                    );
-
-                    await this.sendStatus(
-                        guild,
-                        'Abandoné el canal de voz por inactividad.'
+                    )
+                ) {
+                    this.inactivityDisconnects.delete(
+                        guild.id
                     );
 
                     this.disconnect(
                         guild.id
                     );
 
-                    if (
+                    return;
+                }
+
+                this.disconnect(
+                    guild.id
+                );
+
+                this.sendStatus(
+                    guild,
+                    'Fui desconectado del canal de voz.'
+                );
+
+                return;
+            }
+
+            return;
+        }
+
+        const botMember =
+            guild.members.me;
+
+        if (!botMember) {
+            return;
+        }
+
+        const botChannel =
+            botMember.voice.channel;
+
+        if (!botChannel) {
+            return;
+        }
+
+        const botChannelId =
+            botChannel.id;
+
+        if (
+            newState.channelId ===
+            botChannelId
+        ) {
+            const timer =
+                this.leaveTimers.get(
+                    botChannelId
+                );
+
+            if (timer) {
+                clearTimeout(timer);
+
+                this.leaveTimers.delete(
+                    botChannelId
+                );
+            }
+
+            return;
+        }
+
+        if (
+            oldState.channelId !==
+            botChannelId
+        ) {
+            return;
+        }
+
+        const member =
+            newState.member ||
+            oldState.member;
+
+        if (
+            !member ||
+            member.user.bot
+        ) {
+            return;
+        }
+
+        const humans =
+            botChannel.members.filter(
+                voiceMember =>
+                    !voiceMember.user.bot
+            );
+
+        if (
+            humans.size > 0
+        ) {
+            return;
+        }
+
+        if (
+            this.leaveTimers.has(
+                botChannelId
+            )
+        ) {
+            return;
+        }
+
+        const timer =
+            setTimeout(
+                async () => {
+
+                    this.leaveTimers.delete(
+                        botChannelId
+                    );
+
+                    const currentBotChannel =
                         guild.members.me
-                            ?.voice.channel
+                            ?.voice.channel;
+
+                    if (
+                        !currentBotChannel ||
+                        currentBotChannel.id !==
+                            botChannelId
                     ) {
-                        await guild.members.me
-                            .voice
-                            .disconnect();
+                        return;
                     }
 
-                } catch (error) {
-                    this.inactivityDisconnects.delete(
-                        guild.id
-                    );
+                    const currentHumans =
+                        currentBotChannel.members.filter(
+                            voiceMember =>
+                                !voiceMember.user.bot
+                        );
 
-                    console.error(
-                        '[VOICE] Error al desconectar:',
-                        error
-                    );
-                }
-            },
-            LEAVE_DELAY
+                    if (
+                        currentHumans.size > 0
+                    ) {
+                        return;
+                    }
+
+                    try {
+
+                        this.inactivityDisconnects.add(
+                            guild.id
+                        );
+
+                        await this.sendStatus(
+                            guild,
+                            'Abandoné el canal de voz por inactividad.'
+                        );
+
+                        this.disconnect(
+                            guild.id
+                        );
+
+                        if (
+                            guild.members.me
+                                ?.voice.channel
+                        ) {
+                            await guild.members.me
+                                .voice
+                                .disconnect();
+                        }
+
+                    } catch (error) {
+
+                        this.inactivityDisconnects.delete(
+                            guild.id
+                        );
+
+                        console.error(
+                            '[VOICE] Error al desconectar:',
+                            error
+                        );
+                    }
+
+                },
+                LEAVE_DELAY
+            );
+
+        this.leaveTimers.set(
+            botChannelId,
+            timer
         );
-
-    this.leaveTimers.set(
-        botChannelId,
-        timer
-    );
+    }
 }
