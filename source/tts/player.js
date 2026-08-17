@@ -1,6 +1,7 @@
 import {
     AudioPlayerStatus,
     NoSubscriberBehavior,
+    StreamType,
     VoiceConnectionStatus,
     createAudioPlayer,
     createAudioResource,
@@ -15,10 +16,6 @@ import {
 import {
     spawn
 } from 'node:child_process';
-
-import {
-    PassThrough
-} from 'node:stream';
 
 import ffmpegPath from 'ffmpeg-static';
 
@@ -188,31 +185,19 @@ export class TTSPlayer {
             );
 
 
-        const pcmStream =
-            new PassThrough();
-
-
         input.pipe(
             ffmpeg.stdin
-        );
-
-        ffmpeg.stdout.pipe(
-            pcmStream
         );
 
 
         const resource =
             createAudioResource(
-                pcmStream,
+                ffmpeg.stdout,
                 {
-                    inputType: 'raw'
+                    inputType:
+                        StreamType.Raw
                 }
             );
-
-
-        player.play(
-            resource
-        );
 
 
         return new Promise(
@@ -246,7 +231,7 @@ export class TTSPlayer {
 
 
                         try {
-                            pcmStream.destroy();
+                            ffmpeg.stderr.destroy();
                         } catch {}
 
 
@@ -256,67 +241,71 @@ export class TTSPlayer {
                     };
 
 
+                const finish =
+                    async () => {
+                        try {
+                            await cleanup();
+
+                            resolve();
+                        } catch (error) {
+                            reject(error);
+                        }
+                    };
+
+
+                const fail =
+                    async error => {
+                        try {
+                            await cleanup();
+                        } catch {}
+
+                        reject(error);
+                    };
+
+
                 input.once(
                     'error',
-                    async error => {
-                        await cleanup();
-
-                        reject(
-                            error
-                        );
-                    }
+                    fail
                 );
 
 
                 ffmpeg.once(
                     'error',
-                    async error => {
-                        await cleanup();
-
-                        reject(
-                            error
-                        );
-                    }
+                    fail
                 );
 
 
                 ffmpeg.once(
                     'close',
-                    async code => {
+                    code => {
                         if (
                             code !== 0 &&
                             code !== null
                         ) {
-                            await cleanup();
-
-                            reject(
+                            fail(
                                 new Error(
                                     `FFmpeg terminó con código ${code}.`
                                 )
                             );
-
-                            return;
                         }
                     }
                 );
 
 
-                const checkPlayback =
-                    () => {
-                        if (
-                            player.state.status ===
-                            AudioPlayerStatus.Idle
-                        ) {
-                            cleanup()
-                                .then(resolve)
-                                .catch(reject);
-                        }
-                    };
+                player.once(
+                    'error',
+                    fail
+                );
 
 
                 player.once(
                     AudioPlayerStatus.Idle,
-                    checkPlayback
+                    finish
+                );
+
+
+                player.play(
+                    resource
                 );
             }
         );
