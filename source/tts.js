@@ -128,12 +128,13 @@ normalizeText(message) {
                 return '@usuario';
             }
 
-            const username =
-                member.user?.username ||
+            const displayName =
                 member.displayName ||
+                member.user?.globalName ||
+                member.user?.username ||
                 'usuario';
-
-            return `@${username}`;
+            
+            return `@${displayName}`;
         }
     );
 
