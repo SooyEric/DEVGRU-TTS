@@ -42,9 +42,8 @@ export class TTSSystem {
 
     getPrimaryVoiceChannel(guild) {
         try {
-            const primaryMember = guild.members.cache.get(
-                PRIMARY_BOT_ID
-            );
+            const primaryMember =
+                guild.members.cache.get(PRIMARY_BOT_ID);
 
             if (!primaryMember) {
                 return null;
@@ -61,19 +60,14 @@ export class TTSSystem {
             return false;
         }
 
-        const guild = voiceChannel.guild;
-
-        const primaryChannel = this.getPrimaryVoiceChannel(guild);
+        const primaryChannel =
+            this.getPrimaryVoiceChannel(voiceChannel.guild);
 
         if (!primaryChannel) {
             return false;
         }
 
-        if (primaryChannel.id === voiceChannel.id) {
-            return false;
-        }
-
-        return true;
+        return primaryChannel.id !== voiceChannel.id;
     }
 
     async sendStatus(guild, text) {
@@ -82,9 +76,8 @@ export class TTSSystem {
                 return;
             }
 
-            const channel = guild.channels.cache.get(
-                this.ttsChannelId
-            );
+            const channel =
+                guild.channels.cache.get(this.ttsChannelId);
 
             if (
                 !channel ||
@@ -103,6 +96,73 @@ export class TTSSystem {
         } catch {}
     }
 
+    normalizeText(message) {
+        let text = message.content || '';
+
+        text = text.replace(
+            /<@!?(\d+)>/g,
+            (_, userId) => {
+                const member =
+                    message.guild?.members.cache.get(userId);
+
+                if (!member) {
+                    return '@usuario';
+                }
+
+                const username =
+                    member.user?.username ||
+                    member.displayName ||
+                    'usuario';
+
+                return `@${username}`;
+            }
+        );
+
+        text = text.replace(
+            /<@&(\d+)>/g,
+            (_, roleId) => {
+                const role =
+                    message.guild?.roles.cache.get(roleId);
+
+                if (!role) {
+                    return '@rol';
+                }
+
+                return `@${role.name}`;
+            }
+        );
+
+        text = text.replace(
+            /<a?:\w+:\d+>/g,
+            'emoji'
+        );
+
+        if (
+            message.attachments &&
+            message.attachments.size > 0
+        ) {
+            text = text.trim();
+            text += text ? ' archivo' : 'archivo';
+        }
+
+        if (
+            message.stickers &&
+            message.stickers.size > 0
+        ) {
+            text = text.trim();
+            text += text ? ' archivo' : 'archivo';
+        }
+
+        text = text.replace(
+            /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/gu,
+            'emoji'
+        );
+
+        return text
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
     async handleMessage(message) {
         if (
             !message ||
@@ -112,39 +172,30 @@ export class TTSSystem {
             return;
         }
 
-        const voiceChannel = message.member?.voice?.channel;
+        const voiceChannel =
+            message.member?.voice?.channel;
 
         if (!voiceChannel) {
-            await this.sendStatus(
-                message.guild,
-                'Debes estar en un canal de voz.'
-            );
-
             return;
         }
 
         const guildId = message.guild.id;
 
-        const existingConnection = this.connections.get(guildId);
+        const existingConnection =
+            this.connections.get(guildId);
 
-        if (!existingConnection) {
-            if (!this.canUseVoiceChannel(voiceChannel)) {
+        if (existingConnection) {
+            const currentChannelId =
+                existingConnection.joinConfig.channelId;
+
+            if (currentChannelId !== voiceChannel.id) {
                 return;
             }
-        } else {
-            const primaryChannel = this.getPrimaryVoiceChannel(
-                message.guild
-            );
-
-            if (
-                primaryChannel &&
-                primaryChannel.id === voiceChannel.id
-            ) {
-                return;
-            }
+        } else if (!this.canUseVoiceChannel(voiceChannel)) {
+            return;
         }
 
-        const text = message.content.trim();
+        const text = this.normalizeText(message);
 
         if (!text) {
             return;
@@ -203,7 +254,66 @@ export class TTSSystem {
         let filePath = null;
 
         try {
-            filePath = await this.generateTTS(item.text);
+            const guild = item.voiceChannel.guild;
+
+            const existingConnection =
+                this.connections.get(guild.id);
+
+            if (existingConnection) {
+                const currentChannelId =
+                    existingConnection.joinConfig.channelId;
+
+                if (
+                    currentChannelId !==
+                    item.voiceChannel.id
+                ) {
+                    return;
+                }
+            }
+
+            const primaryChannel =
+                this.getPrimaryVoiceChannel(guild);
+
+            if (
+                primaryChannel &&
+                primaryChannel.id ===
+                    item.voiceChannel.id
+            ) {
+                return;
+            }
+
+            filePath =
+                await this.generateTTS(item.text);
+
+            const latestConnection =
+                this.connections.get(guild.id);
+
+            if (latestConnection) {
+                const currentChannelId =
+                    latestConnection.joinConfig.channelId;
+
+                if (
+                    currentChannelId !==
+                    item.voiceChannel.id
+                ) {
+                    await this.deleteTTSFile(filePath);
+                    filePath = null;
+                    return;
+                }
+            }
+
+            const latestPrimaryChannel =
+                this.getPrimaryVoiceChannel(guild);
+
+            if (
+                latestPrimaryChannel &&
+                latestPrimaryChannel.id ===
+                    item.voiceChannel.id
+            ) {
+                await this.deleteTTSFile(filePath);
+                filePath = null;
+                return;
+            }
 
             await this.play(
                 item.voiceChannel,
@@ -230,15 +340,16 @@ export class TTSSystem {
             throw new Error('El texto está vacío.');
         }
 
-        const audioParts = await googleTTS.getAllAudioBase64(
-            cleanText,
-            {
-                lang: LANGUAGE,
-                slow: false,
-                host: 'https://translate.google.com',
-                timeout: 15_000
-            }
-        );
+        const audioParts =
+            await googleTTS.getAllAudioBase64(
+                cleanText,
+                {
+                    lang: LANGUAGE,
+                    slow: false,
+                    host: 'https://translate.google.com',
+                    timeout: 15_000
+                }
+            );
 
         if (!audioParts?.length) {
             throw new Error(
@@ -246,25 +357,28 @@ export class TTSSystem {
             );
         }
 
-        const directory = await fs.mkdtemp(
-            path.join(
-                os.tmpdir(),
-                'devgru-tts-'
-            )
-        );
-
-        const filePath = path.join(
-            directory,
-            `${crypto.randomUUID()}.mp3`
-        );
-
-        const buffers = audioParts.map(
-            part =>
-                Buffer.from(
-                    part.base64,
-                    'base64'
+        const directory =
+            await fs.mkdtemp(
+                path.join(
+                    os.tmpdir(),
+                    'devgru-tts-'
                 )
-        );
+            );
+
+        const filePath =
+            path.join(
+                directory,
+                `${crypto.randomUUID()}.mp3`
+            );
+
+        const buffers =
+            audioParts.map(
+                part =>
+                    Buffer.from(
+                        part.base64,
+                        'base64'
+                    )
+            );
 
         await fs.writeFile(
             filePath,
@@ -298,55 +412,39 @@ export class TTSSystem {
     }
 
     async connect(voiceChannel) {
-        const guildId = voiceChannel.guild.id;
+        const guildId =
+            voiceChannel.guild.id;
 
-        const existing = this.connections.get(guildId);
+        const existing =
+            this.connections.get(guildId);
 
         if (existing) {
             const currentChannel =
                 existing.joinConfig.channelId;
 
-            if (currentChannel === voiceChannel.id) {
-                const primaryChannel =
-                    this.getPrimaryVoiceChannel(
-                        voiceChannel.guild
-                    );
-
-                if (
-                    primaryChannel &&
-                    primaryChannel.id === voiceChannel.id
-                ) {
-                    this.disconnect(guildId);
-                    return null;
-                }
-
+            if (
+                currentChannel ===
+                voiceChannel.id
+            ) {
                 return existing;
             }
 
-            if (!this.canUseVoiceChannel(voiceChannel)) {
-                return existing;
-            }
-
-            this.stop(guildId);
-
-            existing.destroy();
-
-            this.connections.delete(guildId);
-            this.players.delete(guildId);
+            return existing;
         }
 
         if (!this.canUseVoiceChannel(voiceChannel)) {
             return null;
         }
 
-        const connection = joinVoiceChannel({
-            channelId: voiceChannel.id,
-            guildId,
-            adapterCreator:
-                voiceChannel.guild.voiceAdapterCreator,
-            selfDeaf: true,
-            selfMute: false
-        });
+        const connection =
+            joinVoiceChannel({
+                channelId: voiceChannel.id,
+                guildId,
+                adapterCreator:
+                    voiceChannel.guild.voiceAdapterCreator,
+                selfDeaf: true,
+                selfMute: false
+            });
 
         try {
             await entersState(
@@ -366,18 +464,20 @@ export class TTSSystem {
 
         if (
             primaryChannel &&
-            primaryChannel.id === voiceChannel.id
+            primaryChannel.id ===
+                voiceChannel.id
         ) {
             connection.destroy();
             return null;
         }
 
-        const player = createAudioPlayer({
-            behaviors: {
-                noSubscriber:
-                    NoSubscriberBehavior.Play
-            }
-        });
+        const player =
+            createAudioPlayer({
+                behaviors: {
+                    noSubscriber:
+                        NoSubscriberBehavior.Play
+                }
+            });
 
         connection.subscribe(player);
 
@@ -395,24 +495,8 @@ export class TTSSystem {
     }
 
     async play(voiceChannel, filePath) {
-        const guildId = voiceChannel.guild.id;
-
-        const connection = await this.connect(
-            voiceChannel
-        );
-
-        if (!connection) {
-            await this.deleteTTSFile(filePath);
-            return;
-        }
-
-        const player = this.players.get(guildId);
-
-        if (!player) {
-            throw new Error(
-                'No se pudo crear el reproductor de audio.'
-            );
-        }
+        const guildId =
+            voiceChannel.guild.id;
 
         const primaryChannel =
             this.getPrimaryVoiceChannel(
@@ -421,50 +505,80 @@ export class TTSSystem {
 
         if (
             primaryChannel &&
-            primaryChannel.id === voiceChannel.id
+            primaryChannel.id ===
+                voiceChannel.id
         ) {
-            this.disconnect(guildId);
-
             await this.deleteTTSFile(filePath);
-
             return;
         }
 
-        const ffmpeg = spawn(
-            ffmpegPath,
-            [
-                '-hide_banner',
-                '-loglevel',
-                'error',
-                '-i',
-                'pipe:0',
-                '-f',
-                's16le',
-                '-ar',
-                '48000',
-                '-ac',
-                '2',
-                'pipe:1'
-            ],
-            {
-                stdio: [
-                    'pipe',
-                    'pipe',
-                    'pipe'
-                ]
-            }
-        );
+        const connection =
+            await this.connect(voiceChannel);
 
-        const input = createReadStream(filePath);
+        if (!connection) {
+            await this.deleteTTSFile(filePath);
+            return;
+        }
+
+        const currentChannelId =
+            connection.joinConfig.channelId;
+
+        if (
+            currentChannelId !==
+            voiceChannel.id
+        ) {
+            await this.deleteTTSFile(filePath);
+            return;
+        }
+
+        const player =
+            this.players.get(guildId);
+
+        if (!player) {
+            throw new Error(
+                'No se pudo crear el reproductor de audio.'
+            );
+        }
+
+        const ffmpeg =
+            spawn(
+                ffmpegPath,
+                [
+                    '-hide_banner',
+                    '-loglevel',
+                    'error',
+                    '-i',
+                    'pipe:0',
+                    '-f',
+                    's16le',
+                    '-ar',
+                    '48000',
+                    '-ac',
+                    '2',
+                    'pipe:1'
+                ],
+                {
+                    stdio: [
+                        'pipe',
+                        'pipe',
+                        'pipe'
+                    ]
+                }
+            );
+
+        const input =
+            createReadStream(filePath);
 
         input.pipe(ffmpeg.stdin);
 
-        const resource = createAudioResource(
-            ffmpeg.stdout,
-            {
-                inputType: StreamType.Raw
-            }
-        );
+        const resource =
+            createAudioResource(
+                ffmpeg.stdout,
+                {
+                    inputType:
+                        StreamType.Raw
+                }
+            );
 
         return new Promise(
             (resolve, reject) => {
@@ -723,7 +837,10 @@ export class TTSSystem {
             return;
         }
 
-        if (oldState.id === client.user.id) {
+        if (
+            oldState.id ===
+            client.user.id
+        ) {
             const oldChannelId =
                 oldState.channelId;
 
@@ -760,19 +877,6 @@ export class TTSSystem {
                 oldChannelId &&
                 newChannelId
             ) {
-                const timer =
-                    this.leaveTimers.get(
-                        oldChannelId
-                    );
-
-                if (timer) {
-                    clearTimeout(timer);
-
-                    this.leaveTimers.delete(
-                        oldChannelId
-                    );
-                }
-
                 const primaryChannel =
                     this.getPrimaryVoiceChannel(
                         guild
@@ -785,6 +889,18 @@ export class TTSSystem {
                 ) {
                     this.disconnect(guild.id);
                     return;
+                }
+
+                const timer =
+                    this.leaveTimers.get(
+                        oldChannelId
+                    );
+
+                if (timer) {
+                    clearTimeout(timer);
+                    this.leaveTimers.delete(
+                        oldChannelId
+                    );
                 }
 
                 this.sendStatus(
@@ -806,7 +922,6 @@ export class TTSSystem {
 
                 if (timer) {
                     clearTimeout(timer);
-
                     this.leaveTimers.delete(
                         oldChannelId
                     );
@@ -822,7 +937,6 @@ export class TTSSystem {
                     );
 
                     this.disconnect(guild.id);
-
                     return;
                 }
 
@@ -839,10 +953,10 @@ export class TTSSystem {
             return;
         }
 
-        if (oldState.id === PRIMARY_BOT_ID) {
-            const oldPrimaryChannelId =
-                oldState.channelId;
-
+        if (
+            oldState.id ===
+            PRIMARY_BOT_ID
+        ) {
             const newPrimaryChannelId =
                 newState.channelId;
 
@@ -859,13 +973,6 @@ export class TTSSystem {
                     this.disconnect(guild.id);
                     return;
                 }
-            }
-
-            if (
-                oldPrimaryChannelId &&
-                !newPrimaryChannelId
-            ) {
-                return;
             }
 
             return;
@@ -899,7 +1006,6 @@ export class TTSSystem {
 
             if (timer) {
                 clearTimeout(timer);
-
                 this.leaveTimers.delete(
                     botChannelId
                 );
@@ -944,67 +1050,68 @@ export class TTSSystem {
             return;
         }
 
-        const timer = setTimeout(
-            async () => {
-                this.leaveTimers.delete(
-                    botChannelId
-                );
-
-                const currentBotChannel =
-                    guild.members.me
-                        ?.voice.channel;
-
-                if (
-                    !currentBotChannel ||
-                    currentBotChannel.id !==
+        const timer =
+            setTimeout(
+                async () => {
+                    this.leaveTimers.delete(
                         botChannelId
-                ) {
-                    return;
-                }
-
-                const currentHumans =
-                    currentBotChannel.members.filter(
-                        voiceMember =>
-                            !voiceMember.user.bot
                     );
 
-                if (currentHumans.size > 0) {
-                    return;
-                }
-
-                try {
-                    this.inactivityDisconnects.add(
-                        guild.id
-                    );
-
-                    await this.sendStatus(
-                        guild,
-                        'Abandoné el canal de voz por inactividad.'
-                    );
-
-                    this.disconnect(guild.id);
+                    const currentBotChannel =
+                        guild.members.me
+                            ?.voice.channel;
 
                     if (
-                        guild.members.me
-                            ?.voice.channel
+                        !currentBotChannel ||
+                        currentBotChannel.id !==
+                            botChannelId
                     ) {
-                        await guild.members.me
-                            .voice
-                            .disconnect();
+                        return;
                     }
-                } catch (error) {
-                    this.inactivityDisconnects.delete(
-                        guild.id
-                    );
 
-                    console.error(
-                        '[VOICE] Error al desconectar:',
-                        error
-                    );
-                }
-            },
-            LEAVE_DELAY
-        );
+                    const currentHumans =
+                        currentBotChannel.members.filter(
+                            voiceMember =>
+                                !voiceMember.user.bot
+                        );
+
+                    if (currentHumans.size > 0) {
+                        return;
+                    }
+
+                    try {
+                        this.inactivityDisconnects.add(
+                            guild.id
+                        );
+
+                        await this.sendStatus(
+                            guild,
+                            'Abandoné el canal de voz por inactividad.'
+                        );
+
+                        this.disconnect(guild.id);
+
+                        if (
+                            guild.members.me
+                                ?.voice.channel
+                        ) {
+                            await guild.members.me
+                                .voice
+                                .disconnect();
+                        }
+                    } catch (error) {
+                        this.inactivityDisconnects.delete(
+                            guild.id
+                        );
+
+                        console.error(
+                            '[VOICE] Error al desconectar:',
+                            error
+                        );
+                    }
+                },
+                LEAVE_DELAY
+            );
 
         this.leaveTimers.set(
             botChannelId,
