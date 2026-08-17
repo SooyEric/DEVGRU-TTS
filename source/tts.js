@@ -21,8 +21,6 @@ import {
 } from '@discordjs/voice';
 
 import { EmbedBuilder } from 'discord.js';
-import { config } from '../utils/config.js';
-
 
 const LANGUAGE = 'es';
 const LEAVE_DELAY = 30_000;
@@ -30,10 +28,11 @@ const LEAVE_DELAY = 30_000;
 const INFO_EMOJI =
     '<:info:1538323825542963270>';
 
-
 export class TTSSystem {
 
-    constructor() {
+    constructor(ttsChannelId) {
+        this.ttsChannelId = ttsChannelId;
+    
         this.queues = new Map();
         this.connections = new Map();
         this.players = new Map();
@@ -45,13 +44,13 @@ export class TTSSystem {
 
     async sendStatus(guild, text) {
         try {
-            if (!config.ttsChannelId) {
+            if (!this.ttsChannelId) {
                 return;
             }
-
+            
             const channel =
                 guild.channels.cache.get(
-                    config.ttsChannelId
+                    this.ttsChannelId
                 );
 
             if (!channel) {
