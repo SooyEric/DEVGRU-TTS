@@ -96,122 +96,187 @@ export class TTSSystem {
         } catch {}
     }
 
-    normalizeText(message) {
-        if (!message) {
+normalizeText(message) {
+    if (!message) {
+        return '';
+    }
+
+    let text = message.content || '';
+
+    const linkRegex =
+        /https?:\/\/[^\s<>()]+/gi;
+
+    let linkCount = 0;
+
+    text = text.replace(
+        linkRegex,
+        () => {
+            linkCount++;
             return '';
         }
+    );
 
-        let text = message.content || '';
+    text = text.replace(
+        /<@!?(\d+)>/g,
+        (_, userId) => {
+            const member =
+                message.guild?.members.cache.get(
+                    userId
+                );
 
-        text = text.replace(
-            /<@!?(\d+)>/g,
-            (_, userId) => {
-                const member =
-                    message.guild?.members.cache.get(userId);
-
-                if (!member) {
-                    return '@usuario';
-                }
-
-                const username =
-                    member.user?.username ||
-                    member.displayName ||
-                    'usuario';
-
-                return `@${username}`;
+            if (!member) {
+                return '@usuario';
             }
-        );
 
-        text = text.replace(
-            /<@&(\d+)>/g,
-            (_, roleId) => {
-                const role =
-                    message.guild?.roles.cache.get(roleId);
+            const username =
+                member.user?.username ||
+                member.displayName ||
+                'usuario';
 
-                if (!role) {
-                    return '@rol';
-                }
-
-                return `@${role.name}`;
-            }
-        );
-
-        text = text.replace(
-            /<a?:\w+:\d+>/g,
-            'Emoji'
-        );
-
-        text = text.replace(
-            /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/gu,
-            'Emoji'
-        );
-
-        if (
-            message.attachments &&
-            message.attachments.size > 0
-        ) {
-            for (const attachment of message.attachments.values()) {
-                const contentType =
-                    attachment.contentType?.toLowerCase() || '';
-
-                const name =
-                    attachment.name?.toLowerCase() || '';
-
-                let label = 'Archivo';
-
-                if (
-                    contentType.startsWith('video/') ||
-                    /\.(mp4|webm|mov|mkv|avi|m4v)$/i.test(name)
-                ) {
-                    label = 'Video';
-                } else if (
-                    contentType.startsWith('image/') &&
-                    !contentType.includes('gif') &&
-                    !/\.gif$/i.test(name)
-                ) {
-                    label = 'Imagen';
-                }
-
-                text = text.trim();
-                text += text ? ` ${label}` : label;
-            }
+            return `@${username}`;
         }
+    );
 
-        if (
-            message.stickers &&
-            message.stickers.size > 0
-        ) {
-            const stickerCount =
-                message.stickers.size;
+    text = text.replace(
+        /<@&(\d+)>/g,
+        (_, roleId) => {
+            const role =
+                message.guild?.roles.cache.get(
+                    roleId
+                );
 
-            for (let i = 0; i < stickerCount; i++) {
-                text = text.trim();
-                text += text ? ' Sticker' : 'Sticker';
+            if (!role) {
+                return '@rol';
             }
-        }
 
-        if (
-            message.embeds &&
-            message.embeds.size > 0
+            return `@${role.name}`;
+        }
+    );
+
+    text = text.replace(
+        /<a?:\w+:\d+>/g,
+        'Emoji'
+    );
+
+    text = text.replace(
+        /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/gu,
+        'Emoji'
+    );
+
+    if (
+        message.attachments &&
+        message.attachments.size > 0
+    ) {
+        for (
+            const attachment
+            of message.attachments.values()
         ) {
-            for (const embed of message.embeds) {
-                if (embed.video) {
-                    text = text.trim();
-                    text += text ? ' Video' : 'Video';
-                    continue;
-                }
+            const contentType =
+                attachment.contentType?.toLowerCase() || '';
 
-                if (embed.image || embed.thumbnail) {
-                    text = text.trim();
-                    text += text ? ' Imagen' : 'Imagen';
-                }
+            const name =
+                attachment.name?.toLowerCase() || '';
+
+            let label = 'Archivo';
+
+            if (
+                contentType.startsWith('video/') ||
+                /\.(mp4|webm|mov|mkv|avi|m4v)$/i.test(name)
+            ) {
+                label = 'Video';
+            } else if (
+                contentType.startsWith('image/') &&
+                !contentType.includes('gif') &&
+                !/\.gif$/i.test(name)
+            ) {
+                label = 'Imagen';
             }
-        }
 
-        return text
-            .replace(/\s+/g, ' ')
-            .trim();
+            text = text.trim();
+
+            text +=
+                text
+                    ? ` ${label}`
+                    : label;
+        }
     }
+
+    if (
+        message.stickers &&
+        message.stickers.size > 0
+    ) {
+        const stickerCount =
+            message.stickers.size;
+
+        for (
+            let i = 0;
+            i < stickerCount;
+            i++
+        ) {
+            text = text.trim();
+
+            text +=
+                text
+                    ? ' Sticker'
+                    : 'Sticker';
+        }
+    }
+
+    if (
+        message.embeds &&
+        message.embeds.size > 0
+    ) {
+        for (
+            const embed
+            of message.embeds
+        ) {
+            if (embed.video) {
+                text = text.trim();
+
+                text +=
+                    text
+                        ? ' Video'
+                        : 'Video';
+
+                continue;
+            }
+
+            if (
+                embed.image ||
+                embed.thumbnail
+            ) {
+                text = text.trim();
+
+                text +=
+                    text
+                        ? ' Imagen'
+                        : 'Imagen';
+            }
+        }
+    }
+
+    if (linkCount > 0) {
+        text = text.trim();
+
+        const links =
+            'Link'.repeat(0);
+
+        for (
+            let i = 0;
+            i < linkCount;
+            i++
+        ) {
+            text +=
+                text
+                    ? ' Link'
+                    : 'Link';
+        }
+    }
+
+    return text
+        .replace(/\s+/g, ' ')
+        .trim();
+}
 
     async handleMessage(message) {
         if (
