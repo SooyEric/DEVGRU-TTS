@@ -25,11 +25,10 @@ import { EmbedBuilder } from 'discord.js';
 const LANGUAGE = 'es';
 const LEAVE_DELAY = 30_000;
 
-const INFO_EMOJI =
-    '<:info:1538323825542963270>';
+const PRIMARY_BOT_ID = '1536123486299234445';
+const INFO_EMOJI = '<:info:1538323825542963270>';
 
 export class TTSSystem {
-
     constructor(ttsChannelId) {
         this.ttsChannelId = ttsChannelId;
 
@@ -41,16 +40,51 @@ export class TTSSystem {
         this.inactivityDisconnects = new Set();
     }
 
+    getPrimaryVoiceChannel(guild) {
+        try {
+            const primaryMember = guild.members.cache.get(
+                PRIMARY_BOT_ID
+            );
+
+            if (!primaryMember) {
+                return null;
+            }
+
+            return primaryMember.voice?.channel || null;
+        } catch {
+            return null;
+        }
+    }
+
+    canUseVoiceChannel(voiceChannel) {
+        if (!voiceChannel) {
+            return false;
+        }
+
+        const guild = voiceChannel.guild;
+
+        const primaryChannel = this.getPrimaryVoiceChannel(guild);
+
+        if (!primaryChannel) {
+            return false;
+        }
+
+        if (primaryChannel.id === voiceChannel.id) {
+            return false;
+        }
+
+        return true;
+    }
+
     async sendStatus(guild, text) {
         try {
             if (!this.ttsChannelId) {
                 return;
             }
 
-            const channel =
-                guild.channels.cache.get(
-                    this.ttsChannelId
-                );
+            const channel = guild.channels.cache.get(
+                this.ttsChannelId
+            );
 
             if (
                 !channel ||
@@ -60,16 +94,12 @@ export class TTSSystem {
                 return;
             }
 
-            const embed =
-                new EmbedBuilder()
-                    .setDescription(
-                        `${INFO_EMOJI} ${text}`
-                    );
+            const embed = new EmbedBuilder()
+                .setDescription(`${INFO_EMOJI} ${text}`);
 
             await channel.send({
                 embeds: [embed]
             });
-
         } catch {}
     }
 
@@ -82,8 +112,7 @@ export class TTSSystem {
             return;
         }
 
-        const voiceChannel =
-            message.member?.voice?.channel;
+        const voiceChannel = message.member?.voice?.channel;
 
         if (!voiceChannel) {
             await this.sendStatus(
@@ -94,18 +123,34 @@ export class TTSSystem {
             return;
         }
 
-        const text =
-            message.content.trim();
+        const guildId = message.guild.id;
+
+        const existingConnection = this.connections.get(guildId);
+
+        if (!existingConnection) {
+            if (!this.canUseVoiceChannel(voiceChannel)) {
+                return;
+            }
+        } else {
+            const primaryChannel = this.getPrimaryVoiceChannel(
+                message.guild
+            );
+
+            if (
+                primaryChannel &&
+                primaryChannel.id === voiceChannel.id
+            ) {
+                return;
+            }
+        }
+
+        const text = message.content.trim();
 
         if (!text) {
             return;
         }
 
-        const guildId =
-            message.guild.id;
-
-        let queue =
-            this.queues.get(guildId);
+        let queue = this.queues.get(guildId);
 
         if (!queue) {
             queue = {
@@ -113,10 +158,7 @@ export class TTSSystem {
                 processing: false
             };
 
-            this.queues.set(
-                guildId,
-                queue
-            );
+            this.queues.set(guildId, queue);
         }
 
         queue.items.push({
@@ -125,50 +167,34 @@ export class TTSSystem {
         });
 
         if (!queue.processing) {
-            await this.processQueue(
-                guildId
-            );
+            await this.processQueue(guildId);
         }
     }
 
     async processQueue(guildId) {
-        const queue =
-            this.queues.get(guildId);
+        const queue = this.queues.get(guildId);
 
-        if (
-            !queue ||
-            queue.processing
-        ) {
+        if (!queue || queue.processing) {
             return;
         }
 
         queue.processing = true;
 
         try {
-            while (
-                queue.items.length > 0
-            ) {
-                const item =
-                    queue.items.shift();
+            while (queue.items.length > 0) {
+                const item = queue.items.shift();
 
                 if (!item) {
                     continue;
                 }
 
-                await this.processItem(
-                    item
-                );
+                await this.processItem(item);
             }
-
         } finally {
             queue.processing = false;
 
-            if (
-                queue.items.length === 0
-            ) {
-                this.queues.delete(
-                    guildId
-                );
+            if (queue.items.length === 0) {
+                this.queues.delete(guildId);
             }
         }
     }
@@ -177,10 +203,7 @@ export class TTSSystem {
         let filePath = null;
 
         try {
-            filePath =
-                await this.generateTTS(
-                    item.text
-                );
+            filePath = await this.generateTTS(item.text);
 
             await this.play(
                 item.voiceChannel,
@@ -188,42 +211,34 @@ export class TTSSystem {
             );
 
             filePath = null;
-
         } catch (error) {
-
             console.error(
                 '[TTS] Error procesando TTS:',
                 error
             );
 
             if (filePath) {
-                await this.deleteTTSFile(
-                    filePath
-                );
+                await this.deleteTTSFile(filePath);
             }
         }
     }
 
     async generateTTS(text) {
-        const cleanText =
-            text.trim();
+        const cleanText = text.trim();
 
         if (!cleanText) {
-            throw new Error(
-                'El texto está vacío.'
-            );
+            throw new Error('El texto está vacío.');
         }
 
-        const audioParts =
-            await googleTTS.getAllAudioBase64(
-                cleanText,
-                {
-                    lang: LANGUAGE,
-                    slow: false,
-                    host: 'https://translate.google.com',
-                    timeout: 15_000
-                }
-            );
+        const audioParts = await googleTTS.getAllAudioBase64(
+            cleanText,
+            {
+                lang: LANGUAGE,
+                slow: false,
+                host: 'https://translate.google.com',
+                timeout: 15_000
+            }
+        );
 
         if (!audioParts?.length) {
             throw new Error(
@@ -231,28 +246,25 @@ export class TTSSystem {
             );
         }
 
-        const directory =
-            await fs.mkdtemp(
-                path.join(
-                    os.tmpdir(),
-                    'devgru-tts-'
-                )
-            );
-
-        const filePath =
+        const directory = await fs.mkdtemp(
             path.join(
-                directory,
-                `${crypto.randomUUID()}.mp3`
-            );
+                os.tmpdir(),
+                'devgru-tts-'
+            )
+        );
 
-        const buffers =
-            audioParts.map(
-                part =>
-                    Buffer.from(
-                        part.base64,
-                        'base64'
-                    )
-            );
+        const filePath = path.join(
+            directory,
+            `${crypto.randomUUID()}.mp3`
+        );
+
+        const buffers = audioParts.map(
+            part =>
+                Buffer.from(
+                    part.base64,
+                    'base64'
+                )
+        );
 
         await fs.writeFile(
             filePath,
@@ -282,28 +294,36 @@ export class TTSSystem {
                     force: true
                 }
             );
-
         } catch {}
     }
 
     async connect(voiceChannel) {
-        const guildId =
-            voiceChannel.guild.id;
+        const guildId = voiceChannel.guild.id;
 
-        const existing =
-            this.connections.get(guildId);
+        const existing = this.connections.get(guildId);
 
         if (existing) {
-
             const currentChannel =
-                existing
-                    .joinConfig
-                    .channelId;
+                existing.joinConfig.channelId;
 
-            if (
-                currentChannel ===
-                voiceChannel.id
-            ) {
+            if (currentChannel === voiceChannel.id) {
+                const primaryChannel =
+                    this.getPrimaryVoiceChannel(
+                        voiceChannel.guild
+                    );
+
+                if (
+                    primaryChannel &&
+                    primaryChannel.id === voiceChannel.id
+                ) {
+                    this.disconnect(guildId);
+                    return null;
+                }
+
+                return existing;
+            }
+
+            if (!this.canUseVoiceChannel(voiceChannel)) {
                 return existing;
             }
 
@@ -311,56 +331,55 @@ export class TTSSystem {
 
             existing.destroy();
 
-            this.connections.delete(
-                guildId
-            );
-
-            this.players.delete(
-                guildId
-            );
+            this.connections.delete(guildId);
+            this.players.delete(guildId);
         }
 
-        const connection =
-            joinVoiceChannel({
-                channelId:
-                    voiceChannel.id,
+        if (!this.canUseVoiceChannel(voiceChannel)) {
+            return null;
+        }
 
-                guildId,
-
-                adapterCreator:
-                    voiceChannel.guild
-                        .voiceAdapterCreator,
-
-                selfDeaf: true,
-                selfMute: false
-            });
+        const connection = joinVoiceChannel({
+            channelId: voiceChannel.id,
+            guildId,
+            adapterCreator:
+                voiceChannel.guild.voiceAdapterCreator,
+            selfDeaf: true,
+            selfMute: false
+        });
 
         try {
-
             await entersState(
                 connection,
                 VoiceConnectionStatus.Ready,
                 15_000
             );
-
         } catch (error) {
-
             connection.destroy();
-
             throw error;
         }
 
-        const player =
-            createAudioPlayer({
-                behaviors: {
-                    noSubscriber:
-                        NoSubscriberBehavior.Play
-                }
-            });
+        const primaryChannel =
+            this.getPrimaryVoiceChannel(
+                voiceChannel.guild
+            );
 
-        connection.subscribe(
-            player
-        );
+        if (
+            primaryChannel &&
+            primaryChannel.id === voiceChannel.id
+        ) {
+            connection.destroy();
+            return null;
+        }
+
+        const player = createAudioPlayer({
+            behaviors: {
+                noSubscriber:
+                    NoSubscriberBehavior.Play
+            }
+        });
+
+        connection.subscribe(player);
 
         this.connections.set(
             guildId,
@@ -375,21 +394,19 @@ export class TTSSystem {
         return connection;
     }
 
-    async play(
-        voiceChannel,
-        filePath
-    ) {
-        const guildId =
-            voiceChannel.guild.id;
+    async play(voiceChannel, filePath) {
+        const guildId = voiceChannel.guild.id;
 
-        await this.connect(
+        const connection = await this.connect(
             voiceChannel
         );
 
-        const player =
-            this.players.get(
-                guildId
-            );
+        if (!connection) {
+            await this.deleteTTSFile(filePath);
+            return;
+        }
+
+        const player = this.players.get(guildId);
 
         if (!player) {
             throw new Error(
@@ -397,233 +414,213 @@ export class TTSSystem {
             );
         }
 
-        const ffmpeg =
-            spawn(
-                ffmpegPath,
-                [
-                    '-hide_banner',
-                    '-loglevel',
-                    'error',
-                    '-i',
-                    'pipe:0',
-                    '-f',
-                    's16le',
-                    '-ar',
-                    '48000',
-                    '-ac',
-                    '2',
-                    'pipe:1'
-                ],
-                {
-                    stdio: [
-                        'pipe',
-                        'pipe',
-                        'pipe'
-                    ]
-                }
+        const primaryChannel =
+            this.getPrimaryVoiceChannel(
+                voiceChannel.guild
             );
 
-        const input =
-            createReadStream(
-                filePath
-            );
+        if (
+            primaryChannel &&
+            primaryChannel.id === voiceChannel.id
+        ) {
+            this.disconnect(guildId);
 
-        input.pipe(
-            ffmpeg.stdin
+            await this.deleteTTSFile(filePath);
+
+            return;
+        }
+
+        const ffmpeg = spawn(
+            ffmpegPath,
+            [
+                '-hide_banner',
+                '-loglevel',
+                'error',
+                '-i',
+                'pipe:0',
+                '-f',
+                's16le',
+                '-ar',
+                '48000',
+                '-ac',
+                '2',
+                'pipe:1'
+            ],
+            {
+                stdio: [
+                    'pipe',
+                    'pipe',
+                    'pipe'
+                ]
+            }
         );
 
-        const resource =
-            createAudioResource(
-                ffmpeg.stdout,
-                {
-                    inputType:
-                        StreamType.Raw
-                }
-            );
+        const input = createReadStream(filePath);
+
+        input.pipe(ffmpeg.stdin);
+
+        const resource = createAudioResource(
+            ffmpeg.stdout,
+            {
+                inputType: StreamType.Raw
+            }
+        );
 
         return new Promise(
             (resolve, reject) => {
-
                 let started = false;
                 let settled = false;
 
-                const cleanup =
-                    async () => {
+                const cleanup = async () => {
+                    try {
+                        input.destroy();
+                    } catch {}
 
-                        try {
-                            input.destroy();
-                        } catch {}
-
-                        try {
-                            if (
-                                ffmpeg.exitCode ===
-                                    null &&
-                                !ffmpeg.killed
-                            ) {
-                                ffmpeg.kill();
-                            }
-                        } catch {}
-
-                        try {
-                            ffmpeg.stdin.destroy();
-                        } catch {}
-
-                        try {
-                            ffmpeg.stdout.destroy();
-                        } catch {}
-
-                        try {
-                            ffmpeg.stderr.destroy();
-                        } catch {}
-
-                        await this.deleteTTSFile(
-                            filePath
-                        );
-                    };
-
-                const removeListeners =
-                    () => {
-
-                        player.off(
-                            'stateChange',
-                            onStateChange
-                        );
-
-                        player.off(
-                            'error',
-                            onPlayerError
-                        );
-
-                        input.off(
-                            'error',
-                            onInputError
-                        );
-
-                        ffmpeg.off(
-                            'error',
-                            onFFmpegError
-                        );
-
-                        ffmpeg.off(
-                            'close',
-                            onFFmpegClose
-                        );
-                    };
-
-                const finish =
-                    async () => {
-
-                        if (settled) {
-                            return;
-                        }
-
-                        settled = true;
-
-                        removeListeners();
-
-                        this.activePlayback.delete(
-                            guildId
-                        );
-
-                        await cleanup();
-
-                        resolve();
-                    };
-
-                const fail =
-                    async error => {
-
-                        if (settled) {
-                            return;
-                        }
-
-                        settled = true;
-
-                        removeListeners();
-
-                        this.activePlayback.delete(
-                            guildId
-                        );
-
-                        await cleanup();
-
-                        reject(error);
-                    };
-
-                const cancel =
-                    async () => {
-
-                        if (settled) {
-                            return;
-                        }
-
-                        settled = true;
-
-                        removeListeners();
-
-                        this.activePlayback.delete(
-                            guildId
-                        );
-
-                        try {
-                            player.stop();
-                        } catch {}
-
-                        await cleanup();
-
-                        resolve();
-                    };
-
-                const onStateChange =
-                    (
-                        oldState,
-                        newState
-                    ) => {
-
+                    try {
                         if (
-                            newState.status ===
-                            AudioPlayerStatus.Playing
+                            ffmpeg.exitCode === null &&
+                            !ffmpeg.killed
                         ) {
-                            started = true;
-
-                            return;
+                            ffmpeg.kill();
                         }
+                    } catch {}
 
-                        if (
-                            started &&
-                            newState.status ===
-                            AudioPlayerStatus.Idle
-                        ) {
-                            finish();
-                        }
-                    };
+                    try {
+                        ffmpeg.stdin.destroy();
+                    } catch {}
+
+                    try {
+                        ffmpeg.stdout.destroy();
+                    } catch {}
+
+                    try {
+                        ffmpeg.stderr.destroy();
+                    } catch {}
+
+                    await this.deleteTTSFile(filePath);
+                };
+
+                const removeListeners = () => {
+                    player.off(
+                        'stateChange',
+                        onStateChange
+                    );
+
+                    player.off(
+                        'error',
+                        onPlayerError
+                    );
+
+                    input.off(
+                        'error',
+                        onInputError
+                    );
+
+                    ffmpeg.off(
+                        'error',
+                        onFFmpegError
+                    );
+
+                    ffmpeg.off(
+                        'close',
+                        onFFmpegClose
+                    );
+                };
+
+                const finish = async () => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+
+                    removeListeners();
+
+                    this.activePlayback.delete(guildId);
+
+                    await cleanup();
+
+                    resolve();
+                };
+
+                const fail = async error => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+
+                    removeListeners();
+
+                    this.activePlayback.delete(guildId);
+
+                    await cleanup();
+
+                    reject(error);
+                };
+
+                const cancel = async () => {
+                    if (settled) {
+                        return;
+                    }
+
+                    settled = true;
+
+                    removeListeners();
+
+                    this.activePlayback.delete(guildId);
+
+                    try {
+                        player.stop();
+                    } catch {}
+
+                    await cleanup();
+
+                    resolve();
+                };
+
+                const onStateChange = (
+                    oldState,
+                    newState
+                ) => {
+                    if (
+                        newState.status ===
+                        AudioPlayerStatus.Playing
+                    ) {
+                        started = true;
+                        return;
+                    }
+
+                    if (
+                        started &&
+                        newState.status ===
+                        AudioPlayerStatus.Idle
+                    ) {
+                        finish();
+                    }
+                };
 
                 const onPlayerError =
-                    error =>
-                        fail(error);
+                    error => fail(error);
 
                 const onInputError =
-                    error =>
-                        fail(error);
+                    error => fail(error);
 
                 const onFFmpegError =
-                    error =>
-                        fail(error);
+                    error => fail(error);
 
-                const onFFmpegClose =
-                    code => {
-
-                        if (
-                            code !== 0 &&
-                            code !== null
-                        ) {
-                            fail(
-                                new Error(
-                                    `FFmpeg terminó con código ${code}.`
-                                )
-                            );
-                        }
-                    };
+                const onFFmpegClose = code => {
+                    if (
+                        code !== 0 &&
+                        code !== null
+                    ) {
+                        fail(
+                            new Error(
+                                `FFmpeg terminó con código ${code}.`
+                            )
+                        );
+                    }
+                };
 
                 this.activePlayback.set(
                     guildId,
@@ -658,13 +655,8 @@ export class TTSSystem {
                 );
 
                 try {
-
-                    player.play(
-                        resource
-                    );
-
+                    player.play(resource);
                 } catch (error) {
-
                     fail(error);
                 }
             }
@@ -673,20 +665,15 @@ export class TTSSystem {
 
     stop(guildId) {
         const playback =
-            this.activePlayback.get(
-                guildId
-            );
+            this.activePlayback.get(guildId);
 
         if (playback) {
             playback.cancel();
-
             return true;
         }
 
         const player =
-            this.players.get(
-                guildId
-            );
+            this.players.get(guildId);
 
         if (!player) {
             return false;
@@ -701,10 +688,7 @@ export class TTSSystem {
 
         if (queue) {
             queue.items.length = 0;
-
-            this.queues.delete(
-                guildId
-            );
+            this.queues.delete(guildId);
         }
 
         this.stop(guildId);
@@ -716,21 +700,14 @@ export class TTSSystem {
             connection.destroy();
         }
 
-        this.players.delete(
-            guildId
-        );
-
-        this.connections.delete(
-            guildId
-        );
+        this.players.delete(guildId);
+        this.connections.delete(guildId);
 
         return true;
     }
 
     isConnected(guildId) {
-        return this.connections.has(
-            guildId
-        );
+        return this.connections.has(guildId);
     }
 
     handleVoiceStateUpdate(
@@ -746,10 +723,7 @@ export class TTSSystem {
             return;
         }
 
-        if (
-            oldState.id ===
-            client.user.id
-        ) {
+        if (oldState.id === client.user.id) {
             const oldChannelId =
                 oldState.channelId;
 
@@ -799,6 +773,20 @@ export class TTSSystem {
                     );
                 }
 
+                const primaryChannel =
+                    this.getPrimaryVoiceChannel(
+                        guild
+                    );
+
+                if (
+                    primaryChannel &&
+                    primaryChannel.id ===
+                        newChannelId
+                ) {
+                    this.disconnect(guild.id);
+                    return;
+                }
+
                 this.sendStatus(
                     guild,
                     'Fui movido de canal de voz.'
@@ -833,22 +821,50 @@ export class TTSSystem {
                         guild.id
                     );
 
-                    this.disconnect(
-                        guild.id
-                    );
+                    this.disconnect(guild.id);
 
                     return;
                 }
 
-                this.disconnect(
-                    guild.id
-                );
+                this.disconnect(guild.id);
 
                 this.sendStatus(
                     guild,
                     'Fui desconectado del canal de voz.'
                 );
 
+                return;
+            }
+
+            return;
+        }
+
+        if (oldState.id === PRIMARY_BOT_ID) {
+            const oldPrimaryChannelId =
+                oldState.channelId;
+
+            const newPrimaryChannelId =
+                newState.channelId;
+
+            if (newPrimaryChannelId) {
+                const botChannel =
+                    guild.members.me
+                        ?.voice?.channel;
+
+                if (
+                    botChannel &&
+                    botChannel.id ===
+                        newPrimaryChannelId
+                ) {
+                    this.disconnect(guild.id);
+                    return;
+                }
+            }
+
+            if (
+                oldPrimaryChannelId &&
+                !newPrimaryChannelId
+            ) {
                 return;
             }
 
@@ -916,9 +932,7 @@ export class TTSSystem {
                     !voiceMember.user.bot
             );
 
-        if (
-            humans.size > 0
-        ) {
+        if (humans.size > 0) {
             return;
         }
 
@@ -930,77 +944,67 @@ export class TTSSystem {
             return;
         }
 
-        const timer =
-            setTimeout(
-                async () => {
+        const timer = setTimeout(
+            async () => {
+                this.leaveTimers.delete(
+                    botChannelId
+                );
 
-                    this.leaveTimers.delete(
+                const currentBotChannel =
+                    guild.members.me
+                        ?.voice.channel;
+
+                if (
+                    !currentBotChannel ||
+                    currentBotChannel.id !==
                         botChannelId
+                ) {
+                    return;
+                }
+
+                const currentHumans =
+                    currentBotChannel.members.filter(
+                        voiceMember =>
+                            !voiceMember.user.bot
                     );
 
-                    const currentBotChannel =
+                if (currentHumans.size > 0) {
+                    return;
+                }
+
+                try {
+                    this.inactivityDisconnects.add(
+                        guild.id
+                    );
+
+                    await this.sendStatus(
+                        guild,
+                        'Abandoné el canal de voz por inactividad.'
+                    );
+
+                    this.disconnect(guild.id);
+
+                    if (
                         guild.members.me
-                            ?.voice.channel;
-
-                    if (
-                        !currentBotChannel ||
-                        currentBotChannel.id !==
-                            botChannelId
+                            ?.voice.channel
                     ) {
-                        return;
+                        await guild.members.me
+                            .voice
+                            .disconnect();
                     }
+                } catch (error) {
+                    this.inactivityDisconnects.delete(
+                        guild.id
+                    );
 
-                    const currentHumans =
-                        currentBotChannel.members.filter(
-                            voiceMember =>
-                                !voiceMember.user.bot
-                        );
-
-                    if (
-                        currentHumans.size > 0
-                    ) {
-                        return;
-                    }
-
-                    try {
-
-                        this.inactivityDisconnects.add(
-                            guild.id
-                        );
-
-                        await this.sendStatus(
-                            guild,
-                            'Abandoné el canal de voz por inactividad.'
-                        );
-
-                        this.disconnect(
-                            guild.id
-                        );
-
-                        if (
-                            guild.members.me
-                                ?.voice.channel
-                        ) {
-                            await guild.members.me
-                                .voice
-                                .disconnect();
-                        }
-
-                    } catch (error) {
-
-                        this.inactivityDisconnects.delete(
-                            guild.id
-                        );
-
-                        console.error(
-                            '[VOICE] Error al desconectar:',
-                            error
-                        );
-                    }
-
-                },
-                LEAVE_DELAY
-            );
+                    console.error(
+                        '[VOICE] Error al desconectar:',
+                        error
+                    );
+                }
+            },
+            LEAVE_DELAY
+        );
 
         this.leaveTimers.set(
             botChannelId,
