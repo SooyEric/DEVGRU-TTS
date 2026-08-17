@@ -24,9 +24,6 @@ export default async function voiceStateUpdate(
     const botChannel =
         botMember.voice.channel;
 
-    /*
-     * El bot no está conectado a ningún VC.
-     */
     if (!botChannel) {
         return;
     }
@@ -34,10 +31,6 @@ export default async function voiceStateUpdate(
     const botChannelId =
         botChannel.id;
 
-    /*
-     * Si el propio bot salió del VC,
-     * limpiamos cualquier temporizador.
-     */
     if (
         oldState.id === client.user.id &&
         !newState.channel
@@ -55,11 +48,7 @@ export default async function voiceStateUpdate(
 
         return;
     }
-
-    /*
-     * Ignoramos cambios que no involucren
-     * entrar/salir/cambiar de canal.
-     */
+    
     if (
         oldState.channelId ===
         newState.channelId
@@ -67,12 +56,6 @@ export default async function voiceStateUpdate(
         return;
     }
 
-    /*
-     * Solo nos interesa gente entrando,
-     * saliendo o cambiando de canal.
-     *
-     * Los bots no cuentan como personas.
-     */
     const member =
         newState.member ||
         oldState.member;
@@ -80,12 +63,6 @@ export default async function voiceStateUpdate(
     if (!member || member.user.bot) {
         return;
     }
-
-    /*
-     * ─────────────────────────────
-     * ALGUIEN ENTRA AL VC DEL BOT
-     * ─────────────────────────────
-     */
 
     if (
         newState.channelId ===
@@ -109,12 +86,6 @@ export default async function voiceStateUpdate(
         return;
     }
 
-    /*
-     * ─────────────────────────────
-     * ALGUIEN SALE DEL VC DEL BOT
-     * ─────────────────────────────
-     */
-
     if (
         oldState.channelId !==
         botChannelId
@@ -122,27 +93,16 @@ export default async function voiceStateUpdate(
         return;
     }
 
-    /*
-     * Comprobamos cuántos usuarios humanos
-     * quedan actualmente en el VC.
-     */
     const humans =
         botChannel.members.filter(
             voiceMember =>
                 !voiceMember.user.bot
         );
 
-    /*
-     * Todavía queda alguien.
-     * No hacemos nada.
-     */
     if (humans.size > 0) {
         return;
     }
 
-    /*
-     * Ya existe un temporizador.
-     */
     if (
         leaveTimers.has(botChannelId)
     ) {
@@ -153,28 +113,15 @@ export default async function voiceStateUpdate(
         '[VOICE] El bot quedó solo. Saldrá en 30 segundos.'
     );
 
-    /*
-     * ─────────────────────────────
-     * TEMPORIZADOR DE 30 SEGUNDOS
-     * ─────────────────────────────
-     */
-
     const timer = setTimeout(
         async () => {
             leaveTimers.delete(
                 botChannelId
             );
 
-            /*
-             * Volvemos a obtener el canal
-             * actual del bot.
-             */
             const currentBotChannel =
                 guild.members.me?.voice.channel;
 
-            /*
-             * El bot ya no está en ese canal.
-             */
             if (
                 !currentBotChannel ||
                 currentBotChannel.id !==
@@ -183,20 +130,12 @@ export default async function voiceStateUpdate(
                 return;
             }
 
-            /*
-             * Comprobamos nuevamente que
-             * no haya usuarios humanos.
-             */
             const currentHumans =
                 currentBotChannel.members.filter(
                     voiceMember =>
                         !voiceMember.user.bot
                 );
 
-            /*
-             * Alguien volvió durante los
-             * últimos 30 segundos.
-             */
             if (currentHumans.size > 0) {
                 return;
             }
@@ -206,23 +145,10 @@ export default async function voiceStateUpdate(
             );
 
             try {
-                /*
-                 * Música
-                 */
+
                 const guildId =
                     guild.id;
 
-                if (
-                    client.musicManager
-                        ?.isConnected(guildId)
-                ) {
-                    client.musicManager
-                        .destroy(guildId);
-                }
-
-                /*
-                 * TTS
-                 */
                 if (
                     client.ttsManager
                         ?.isConnected(guildId)
@@ -230,10 +156,7 @@ export default async function voiceStateUpdate(
                     client.ttsManager
                         .disconnect(guildId);
                 }
-
-                /*
-                 * Desconexión física del bot.
-                 */
+                
                 if (
                     guild.members.me?.voice
                         .channel
