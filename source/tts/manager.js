@@ -1,7 +1,10 @@
 import { TTSQueue } from './queue.js';
 import { TTSPlayer } from './player.js';
 
-import { generateTTS } from './engine.js';
+import {
+    generateTTS,
+    deleteTTSFile
+} from './engine.js';
 
 import {
     logger
@@ -24,6 +27,7 @@ export class TTSManager {
                 guildId
             );
 
+
         if (!queue) {
             queue =
                 new TTSQueue();
@@ -33,6 +37,7 @@ export class TTSManager {
                 queue
             );
         }
+
 
         return queue;
     }
@@ -168,11 +173,22 @@ export class TTSManager {
                 filePath
             );
 
+
+            filePath =
+                null;
+
         } catch (error) {
             logger.error(
                 `Error procesando TTS de ${item.username}.`,
                 error
             );
+
+
+            if (filePath) {
+                await deleteTTSFile(
+                    filePath
+                );
+            }
         }
     }
 
