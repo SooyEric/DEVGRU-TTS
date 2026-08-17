@@ -20,9 +20,15 @@ import {
     joinVoiceChannel
 } from '@discordjs/voice';
 
+import { EmbedBuilder } from 'discord.js';
+import { config } from '../utils/config.js';
+
 
 const LANGUAGE = 'es';
 const LEAVE_DELAY = 30_000;
+
+const INFO_EMOJI =
+    '<:info:1538323825542963270>';
 
 
 export class TTSSystem {
@@ -33,6 +39,43 @@ export class TTSSystem {
         this.players = new Map();
         this.activePlayback = new Map();
         this.leaveTimers = new Map();
+        this.inactivityDisconnects = new Set();
+    }
+
+
+    async sendStatus(guild, text) {
+        try {
+            if (!config.ttsChannelId) {
+                return;
+            }
+
+            const channel =
+                guild.channels.cache.get(
+                    config.ttsChannelId
+                );
+
+            if (!channel) {
+                return;
+            }
+
+            if (
+                !channel.isTextBased() ||
+                !channel.send
+            ) {
+                return;
+            }
+
+            const embed =
+                new EmbedBuilder()
+                    .setDescription(
+                        `${INFO_EMOJI} ${text}`
+                    );
+
+            await channel.send({
+                embeds: [embed]
+            });
+
+        } catch {}
     }
 
 
@@ -49,6 +92,11 @@ export class TTSSystem {
             message.member?.voice?.channel;
 
         if (!voiceChannel) {
+            await this.sendStatus(
+                message.guild,
+                'Debes estar en un canal de voz.'
+            );
+
             return;
         }
 
@@ -118,7 +166,9 @@ export class TTSSystem {
                     item
                 );
             }
+
         } finally {
+
             queue.processing = false;
 
             if (
@@ -136,6 +186,7 @@ export class TTSSystem {
         let filePath = null;
 
         try {
+
             filePath =
                 await this.generateTTS(
                     item.text
@@ -216,7 +267,9 @@ export class TTSSystem {
 
         await fs.writeFile(
             filePath,
-            Buffer.concat(buffers)
+            Buffer.concat(
+                buffers
+            )
         );
 
         return filePath;
@@ -229,6 +282,7 @@ export class TTSSystem {
         }
 
         try {
+
             await fs.rm(
                 filePath,
                 {
@@ -410,7 +464,6 @@ export class TTSSystem {
                 let started = false;
                 let settled = false;
 
-
                 const cleanup =
                     async () => {
 
@@ -419,6 +472,7 @@ export class TTSSystem {
                         } catch {}
 
                         try {
+
                             if (
                                 ffmpeg.exitCode ===
                                     null &&
@@ -426,6 +480,7 @@ export class TTSSystem {
                             ) {
                                 ffmpeg.kill();
                             }
+
                         } catch {}
 
                         try {
@@ -444,7 +499,6 @@ export class TTSSystem {
                             filePath
                         );
                     };
-
 
                 const removeListeners =
                     () => {
@@ -475,7 +529,6 @@ export class TTSSystem {
                         );
                     };
 
-
                 const finish =
                     async () => {
 
@@ -496,7 +549,6 @@ export class TTSSystem {
                         resolve();
                     };
 
-
                 const fail =
                     async error => {
 
@@ -516,7 +568,6 @@ export class TTSSystem {
 
                         reject(error);
                     };
-
 
                 const cancel =
                     async () => {
@@ -542,7 +593,6 @@ export class TTSSystem {
                         resolve();
                     };
 
-
                 const onStateChange =
                     (
                         oldState,
@@ -554,6 +604,7 @@ export class TTSSystem {
                             AudioPlayerStatus.Playing
                         ) {
                             started = true;
+
                             return;
                         }
 
@@ -566,21 +617,17 @@ export class TTSSystem {
                         }
                     };
 
-
                 const onPlayerError =
                     error =>
                         fail(error);
-
 
                 const onInputError =
                     error =>
                         fail(error);
 
-
                 const onFFmpegError =
                     error =>
                         fail(error);
-
 
                 const onFFmpegClose =
                     code => {
@@ -597,14 +644,12 @@ export class TTSSystem {
                         }
                     };
 
-
                 this.activePlayback.set(
                     guildId,
                     {
                         cancel
                     }
                 );
-
 
                 input.once(
                     'error',
@@ -631,7 +676,6 @@ export class TTSSystem {
                     onStateChange
                 );
 
-
                 try {
 
                     player.play(
@@ -655,6 +699,7 @@ export class TTSSystem {
 
         if (playback) {
             playback.cancel();
+
             return true;
         }
 
@@ -672,7 +717,6 @@ export class TTSSystem {
 
 
     disconnect(guildId) {
-
         const queue =
             this.queues.get(
                 guildId
@@ -736,11 +780,6 @@ export class TTSSystem {
             return;
         }
 
-
-        /*
-         * Detectar cambios del propio bot.
-         */
-
         if (
             oldState.id ===
             client.user.id
@@ -754,7 +793,37 @@ export class TTSSystem {
 
 
             if (
-                oldChannelId !==
+                oldState.serverMute !==
+                newState.serverMute ||
+                oldState.selfMute !==
+                newState.selfMute
+            ) {
+
+                if (
+                    newState.serverMute ||
+                    newState.selfMute
+                ) {
+
+                    this.sendStatus(
+                        guild,
+                        'Fui silenciado en el canal de voz.'
+                    );
+                }
+
+                return;
+            }
+
+
+            if (
+                oldChannelId ===
+                newChannelId
+            ) {
+                return;
+            }
+
+
+            if (
+                oldChannelId &&
                 newChannelId
             ) {
 
@@ -774,11 +843,76 @@ export class TTSSystem {
                     );
                 }
 
+                this.disconnect(
+                    guild.id
+                );
+
+                this.sendStatus(
+                    guild,
+                    'Fui movido de canal de voz.'
+                );
+
+                return;
+            }
+
+
+            if (
+                oldChannelId &&
+                !newChannelId
+            ) {
+
+                const timer =
+                    this.leaveTimers.get(
+                        oldChannelId
+                    );
+
+                if (timer) {
+
+                    clearTimeout(
+                        timer
+                    );
+
+                    this.leaveTimers.delete(
+                        oldChannelId
+                    );
+                }
+
+
+                if (
+                    this.inactivityDisconnects.has(
+                        guild.id
+                    )
+                ) {
+
+                    this.inactivityDisconnects.delete(
+                        guild.id
+                    );
+
+                    this.disconnect(
+                        guild.id
+                    );
+
+                    this.sendStatus(
+                        guild,
+                        'Abandoné el canal de voz por inactividad.'
+                    );
+
+                    return;
+                }
+
 
                 this.disconnect(
                     guild.id
                 );
+
+                this.sendStatus(
+                    guild,
+                    'Fui desconectado del canal de voz.'
+                );
+
+                return;
             }
+
 
             return;
         }
@@ -794,10 +928,6 @@ export class TTSSystem {
         const botChannelId =
             botChannel.id;
 
-
-        /*
-         * Alguien entró al VC del bot.
-         */
 
         if (
             newState.channelId ===
@@ -823,10 +953,6 @@ export class TTSSystem {
             return;
         }
 
-
-        /*
-         * No fue una salida del VC del bot.
-         */
 
         if (
             oldState.channelId !==
@@ -854,7 +980,6 @@ export class TTSSystem {
                     !voiceMember.user.bot
             );
 
-
         if (
             humans.size > 0
         ) {
@@ -879,11 +1004,9 @@ export class TTSSystem {
                         botChannelId
                     );
 
-
                     const currentBotChannel =
                         guild.members.me
                             ?.voice.channel;
-
 
                     if (
                         !currentBotChannel ||
@@ -900,7 +1023,6 @@ export class TTSSystem {
                                 !voiceMember.user.bot
                         );
 
-
                     if (
                         currentHumans.size > 0
                     ) {
@@ -909,6 +1031,15 @@ export class TTSSystem {
 
 
                     try {
+
+                        this.inactivityDisconnects.add(
+                            guild.id
+                        );
+
+                        await this.sendStatus(
+                            guild,
+                            'Abandoné el canal de voz por inactividad.'
+                        );
 
                         this.disconnect(
                             guild.id
@@ -925,6 +1056,10 @@ export class TTSSystem {
                         }
 
                     } catch (error) {
+
+                        this.inactivityDisconnects.delete(
+                            guild.id
+                        );
 
                         console.error(
                             '[VOICE] Error al desconectar:',
