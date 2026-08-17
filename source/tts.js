@@ -97,6 +97,10 @@ export class TTSSystem {
     }
 
     normalizeText(message) {
+        if (!message) {
+            return '';
+        }
+
         let text = message.content || '';
 
         text = text.replace(
@@ -134,29 +138,75 @@ export class TTSSystem {
 
         text = text.replace(
             /<a?:\w+:\d+>/g,
-            'emoji'
+            'Emoji'
+        );
+
+        text = text.replace(
+            /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/gu,
+            'Emoji'
         );
 
         if (
             message.attachments &&
             message.attachments.size > 0
         ) {
-            text = text.trim();
-            text += text ? ' archivo' : 'archivo';
+            for (const attachment of message.attachments.values()) {
+                const contentType =
+                    attachment.contentType?.toLowerCase() || '';
+
+                const name =
+                    attachment.name?.toLowerCase() || '';
+
+                let label = 'Archivo';
+
+                if (
+                    contentType.startsWith('video/') ||
+                    /\.(mp4|webm|mov|mkv|avi|m4v)$/i.test(name)
+                ) {
+                    label = 'Video';
+                } else if (
+                    contentType.startsWith('image/') &&
+                    !contentType.includes('gif') &&
+                    !/\.gif$/i.test(name)
+                ) {
+                    label = 'Imagen';
+                }
+
+                text = text.trim();
+                text += text ? ` ${label}` : label;
+            }
         }
 
         if (
             message.stickers &&
             message.stickers.size > 0
         ) {
-            text = text.trim();
-            text += text ? ' archivo' : 'archivo';
+            const stickerCount =
+                message.stickers.size;
+
+            for (let i = 0; i < stickerCount; i++) {
+                text = text.trim();
+                text += text ? ' Sticker' : 'Sticker';
+            }
         }
 
-        text = text.replace(
-            /(?:\p{Extended_Pictographic}|\p{Emoji_Presentation})/gu,
-            'emoji'
-        );
+        if (
+            message.embeds &&
+            message.embeds.size > 0
+        ) {
+            for (const embed of message.embeds) {
+                if (embed.video) {
+                    text = text.trim();
+                    text += text ? ' Video' : 'Video';
+                    continue;
+                }
+
+                if (embed.image || embed.thumbnail) {
+                    text = text.trim();
+                    text += text ? ' Imagen' : 'Imagen';
+                }
+            }
+        }
 
         return text
             .replace(/\s+/g, ' ')
