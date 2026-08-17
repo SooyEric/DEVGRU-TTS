@@ -9,10 +9,7 @@ import {
 
 
 export class TTSManager {
-    constructor(musicManager) {
-        this.musicManager =
-            musicManager;
-
+    constructor() {
         this.player =
             new TTSPlayer();
 
@@ -166,22 +163,9 @@ export class TTSManager {
                 );
 
 
-            const guildId =
-                item.voiceChannel
-                    .guild.id;
-
-
-            const mixer =
-                this.musicManager
-                    .getMixer(
-                        guildId
-                    );
-
-
             await this.player.play(
                 item.voiceChannel,
-                filePath,
-                mixer
+                filePath
             );
 
         } catch (error) {
