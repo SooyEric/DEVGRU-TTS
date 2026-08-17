@@ -1,7 +1,7 @@
 {
   "name": "devgru-tts",
   "version": "1.0.0",
-  "description": "DEVGRU-TTS - Discord music and Spanish TTS bot",
+  "description": "DEVGRU-TTS - Discord Spanish TTS bot",
   "type": "module",
   "main": "source/app.js",
   "scripts": {
@@ -11,15 +11,10 @@
     "node": "22.x"
   },
   "dependencies": {
-    "@discord-player/extractor": "^7.2.0",
     "@discordjs/voice": "^0.19.0",
-    "@wetalabs/mixer": "^1.1.6",
-    "discord-player": "^7.2.0",
-    "discord-player-youtubedlp": "^1.1.8",
     "discord.js": "^14.24.0",
     "dotenv": "^17.2.1",
     "ffmpeg-static": "^5.2.0",
-    "google-tts-api": "^2.0.2",
-    "ytdlp-nodejs": "^3.4.1"
+    "google-tts-api": "^2.0.2"
   }
 }
