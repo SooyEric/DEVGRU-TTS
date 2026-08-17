@@ -1,5 +1,9 @@
 import {
+    AudioPlayerStatus,
+    NoSubscriberBehavior,
     VoiceConnectionStatus,
+    createAudioPlayer,
+    createAudioResource,
     entersState,
     joinVoiceChannel
 } from '@discordjs/voice';
@@ -12,6 +16,10 @@ import {
     spawn
 } from 'node:child_process';
 
+import {
+    PassThrough
+} from 'node:stream';
+
 import ffmpegPath from 'ffmpeg-static';
 
 import {
@@ -22,6 +30,7 @@ import {
 export class TTSPlayer {
     constructor() {
         this.connections = new Map();
+        this.players = new Map();
     }
 
 
@@ -48,6 +57,10 @@ export class TTSPlayer {
             existing.destroy();
 
             this.connections.delete(
+                guildId
+            );
+
+            this.players.delete(
                 guildId
             );
         }
@@ -82,9 +95,28 @@ export class TTSPlayer {
         }
 
 
+        const player =
+            createAudioPlayer({
+                behaviors: {
+                    noSubscriber:
+                        NoSubscriberBehavior.Play
+                }
+            });
+
+
+        connection.subscribe(
+            player
+        );
+
+
         this.connections.set(
             guildId,
             connection
+        );
+
+        this.players.set(
+            guildId,
+            player
         );
 
 
@@ -94,23 +126,28 @@ export class TTSPlayer {
 
     async play(
         voiceChannel,
-        filePath,
-        mixer
+        filePath
     ) {
         const guildId =
             voiceChannel.guild.id;
 
 
-        if (!mixer) {
-            throw new Error(
-                'No se recibió un mixer de audio.'
-            );
-        }
-
-
         await this.connect(
             voiceChannel
         );
+
+
+        const player =
+            this.players.get(
+                guildId
+            );
+
+
+        if (!player) {
+            throw new Error(
+                'No se pudo crear el reproductor de audio.'
+            );
+        }
 
 
         const ffmpeg =
@@ -151,16 +188,30 @@ export class TTSPlayer {
             );
 
 
+        const pcmStream =
+            new PassThrough();
+
+
         input.pipe(
             ffmpeg.stdin
         );
 
-
         ffmpeg.stdout.pipe(
-            mixer,
-            {
-                end: false
-            }
+            pcmStream
+        );
+
+
+        const resource =
+            createAudioResource(
+                pcmStream,
+                {
+                    inputType: 'raw'
+                }
+            );
+
+
+        player.play(
+            resource
         );
 
 
@@ -186,6 +237,16 @@ export class TTSPlayer {
 
                         try {
                             ffmpeg.stdin.destroy();
+                        } catch {}
+
+
+                        try {
+                            ffmpeg.stdout.destroy();
+                        } catch {}
+
+
+                        try {
+                            pcmStream.destroy();
                         } catch {}
 
 
@@ -222,13 +283,12 @@ export class TTSPlayer {
                 ffmpeg.once(
                     'close',
                     async code => {
-                        await cleanup();
-
-
                         if (
                             code !== 0 &&
                             code !== null
                         ) {
+                            await cleanup();
+
                             reject(
                                 new Error(
                                     `FFmpeg terminó con código ${code}.`
@@ -237,10 +297,26 @@ export class TTSPlayer {
 
                             return;
                         }
-
-
-                        resolve();
                     }
+                );
+
+
+                const checkPlayback =
+                    () => {
+                        if (
+                            player.state.status ===
+                            AudioPlayerStatus.Idle
+                        ) {
+                            cleanup()
+                                .then(resolve)
+                                .catch(reject);
+                        }
+                    };
+
+
+                player.once(
+                    AudioPlayerStatus.Idle,
+                    checkPlayback
                 );
             }
         );
@@ -248,11 +324,30 @@ export class TTSPlayer {
 
 
     stop(guildId) {
-        return false;
+        const player =
+            this.players.get(
+                guildId
+            );
+
+        if (!player) {
+            return false;
+        }
+
+        return player.stop();
     }
 
 
     disconnect(guildId) {
+        const player =
+            this.players.get(
+                guildId
+            );
+
+        if (player) {
+            player.stop();
+        }
+
+
         const connection =
             this.connections.get(
                 guildId
@@ -263,6 +358,10 @@ export class TTSPlayer {
             connection.destroy();
         }
 
+
+        this.players.delete(
+            guildId
+        );
 
         this.connections.delete(
             guildId
