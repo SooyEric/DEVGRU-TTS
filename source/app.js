@@ -7,14 +7,6 @@ import { config } from './utils/config.js';
 import { logger } from './utils/logger.js';
 
 import {
-    CommandHandler
-} from './commandHandler.js';
-
-import {
-    MusicManager
-} from './music/manager.js';
-
-import {
     TTSManager
 } from './tts/manager.js';
 
@@ -44,24 +36,13 @@ const client = new Client({
     ]
 });
 
-client.commandHandler =
-    new CommandHandler(client);
-
-client.musicManager =
-    new MusicManager(client);
-
 client.ttsManager =
-    new TTSManager(
-        client.musicManager
-    );
+    new TTSManager();
 
 client.once(
     'clientReady',
     async () => {
         try {
-            await client.musicManager
-                .initialize();
-
             await ready(client);
 
             logger.success(
