@@ -26,8 +26,14 @@ import {
 
 export class TTSPlayer {
     constructor() {
-        this.connections = new Map();
-        this.players = new Map();
+        this.connections =
+            new Map();
+
+        this.players =
+            new Map();
+
+        this.activePlayback =
+            new Map();
     }
 
 
@@ -35,14 +41,17 @@ export class TTSPlayer {
         const guildId =
             voiceChannel.guild.id;
 
+
         const existing =
             this.connections.get(
                 guildId
             );
 
+
         if (existing) {
             const currentChannel =
                 existing.joinConfig.channelId;
+
 
             if (
                 currentChannel ===
@@ -51,11 +60,19 @@ export class TTSPlayer {
                 return existing;
             }
 
+
+            this.stop(
+                guildId
+            );
+
+
             existing.destroy();
+
 
             this.connections.delete(
                 guildId
             );
+
 
             this.players.delete(
                 guildId
@@ -111,6 +128,7 @@ export class TTSPlayer {
             connection
         );
 
+
         this.players.set(
             guildId,
             player
@@ -144,6 +162,23 @@ export class TTSPlayer {
             throw new Error(
                 'No se pudo crear el reproductor de audio.'
             );
+        }
+
+
+        /*
+         * No debería ocurrir normalmente porque
+         * TTSManager procesa la cola de forma
+         * secuencial, pero evitamos dos
+         * reproducciones simultáneas por seguridad.
+         */
+        const existingPlayback =
+            this.activePlayback.get(
+                guildId
+            );
+
+
+        if (existingPlayback) {
+            existingPlayback.cancel();
         }
 
 
@@ -203,14 +238,29 @@ export class TTSPlayer {
         return new Promise(
             (resolve, reject) => {
 
-                let started = false;
-                let settled = false;
+                let started =
+                    false;
+
+                let settled =
+                    false;
 
 
                 const cleanup =
                     async () => {
+
                         try {
                             input.destroy();
+                        } catch {}
+
+
+                        try {
+                            if (
+                                ffmpeg.exitCode ===
+                                    null &&
+                                !ffmpeg.killed
+                            ) {
+                                ffmpeg.kill();
+                            }
                         } catch {}
 
 
@@ -237,20 +287,58 @@ export class TTSPlayer {
                     };
 
 
-                const finish =
-                    async () => {
-                        if (settled) {
-                            return;
-                        }
-
-                        settled = true;
+                const removeListeners =
+                    () => {
 
                         player.off(
                             'stateChange',
                             onStateChange
                         );
 
+                        player.off(
+                            'error',
+                            onPlayerError
+                        );
+
+                        input.off(
+                            'error',
+                            onInputError
+                        );
+
+                        ffmpeg.off(
+                            'error',
+                            onFFmpegError
+                        );
+
+                        ffmpeg.off(
+                            'close',
+                            onFFmpegClose
+                        );
+                    };
+
+
+                const finish =
+                    async () => {
+
+                        if (settled) {
+                            return;
+                        }
+
+
+                        settled =
+                            true;
+
+
+                        removeListeners();
+
+
+                        this.activePlayback.delete(
+                            guildId
+                        );
+
+
                         await cleanup();
+
 
                         resolve();
                     };
@@ -258,20 +346,60 @@ export class TTSPlayer {
 
                 const fail =
                     async error => {
+
                         if (settled) {
                             return;
                         }
 
-                        settled = true;
 
-                        player.off(
-                            'stateChange',
-                            onStateChange
+                        settled =
+                            true;
+
+
+                        removeListeners();
+
+
+                        this.activePlayback.delete(
+                            guildId
                         );
+
 
                         await cleanup();
 
+
                         reject(error);
+                    };
+
+
+                const cancel =
+                    async () => {
+
+                        if (settled) {
+                            return;
+                        }
+
+
+                        settled =
+                            true;
+
+
+                        removeListeners();
+
+
+                        this.activePlayback.delete(
+                            guildId
+                        );
+
+
+                        try {
+                            player.stop();
+                        } catch {}
+
+
+                        await cleanup();
+
+
+                        resolve();
                     };
 
 
@@ -281,41 +409,57 @@ export class TTSPlayer {
                         newState
                     ) => {
 
+                        /*
+                         * El AudioPlayer realmente
+                         * comenzó a reproducir.
+                         */
                         if (
                             newState.status ===
                             AudioPlayerStatus.Playing
                         ) {
-                            started = true;
+                            started =
+                                true;
 
                             return;
                         }
 
 
+                        /*
+                         * Solo consideramos
+                         * Idle como finalización
+                         * después de Playing.
+                         */
                         if (
                             started &&
                             newState.status ===
-                            AudioPlayerStatus.Idle
+                                AudioPlayerStatus.Idle
                         ) {
                             finish();
                         }
                     };
 
 
-                input.once(
-                    'error',
-                    fail
-                );
+                const onPlayerError =
+                    error => {
+                        fail(error);
+                    };
 
 
-                ffmpeg.once(
-                    'error',
-                    fail
-                );
+                const onInputError =
+                    error => {
+                        fail(error);
+                    };
 
 
-                ffmpeg.once(
-                    'close',
+                const onFFmpegError =
+                    error => {
+                        fail(error);
+                    };
+
+
+                const onFFmpegClose =
                     code => {
+
                         if (
                             code !== 0 &&
                             code !== null
@@ -326,13 +470,38 @@ export class TTSPlayer {
                                 )
                             );
                         }
+                    };
+
+
+                this.activePlayback.set(
+                    guildId,
+                    {
+                        cancel
                     }
+                );
+
+
+                input.once(
+                    'error',
+                    onInputError
+                );
+
+
+                ffmpeg.once(
+                    'error',
+                    onFFmpegError
+                );
+
+
+                ffmpeg.once(
+                    'close',
+                    onFFmpegClose
                 );
 
 
                 player.once(
                     'error',
-                    fail
+                    onPlayerError
                 );
 
 
@@ -342,37 +511,55 @@ export class TTSPlayer {
                 );
 
 
-                player.play(
-                    resource
-                );
+                try {
+                    player.play(
+                        resource
+                    );
+                } catch (error) {
+                    fail(error);
+                }
             }
         );
     }
 
 
     stop(guildId) {
+        const playback =
+            this.activePlayback.get(
+                guildId
+            );
+
+
+        if (playback) {
+            playback.cancel();
+
+            return true;
+        }
+
+
         const player =
             this.players.get(
                 guildId
             );
 
+
         if (!player) {
             return false;
         }
+
 
         return player.stop();
     }
 
 
     disconnect(guildId) {
-        const player =
-            this.players.get(
-                guildId
-            );
-
-        if (player) {
-            player.stop();
-        }
+        /*
+         * Primero cancelamos cualquier
+         * reproducción activa.
+         */
+        this.stop(
+            guildId
+        );
 
 
         const connection =
@@ -389,6 +576,7 @@ export class TTSPlayer {
         this.players.delete(
             guildId
         );
+
 
         this.connections.delete(
             guildId
