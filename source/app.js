@@ -34,7 +34,9 @@ const client =
     });
 
 const tts =
-    new TTSSystem();
+    new TTSSystem(
+        TTS_CHANNEL_ID
+    );
 
 client.once(
     'clientReady',
