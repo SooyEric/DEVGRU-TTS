@@ -203,18 +203,12 @@ export class TTSPlayer {
         return new Promise(
             (resolve, reject) => {
 
-                let finished = false;
+                let started = false;
+                let settled = false;
 
 
                 const cleanup =
                     async () => {
-                        if (finished) {
-                            return;
-                        }
-
-                        finished = true;
-
-
                         try {
                             input.destroy();
                         } catch {}
@@ -235,31 +229,75 @@ export class TTSPlayer {
                         } catch {}
 
 
-                        await deleteTTSFile(
-                            filePath
-                        );
+                        try {
+                            await deleteTTSFile(
+                                filePath
+                            );
+                        } catch {}
                     };
 
 
                 const finish =
                     async () => {
-                        try {
-                            await cleanup();
-
-                            resolve();
-                        } catch (error) {
-                            reject(error);
+                        if (settled) {
+                            return;
                         }
+
+                        settled = true;
+
+                        player.off(
+                            'stateChange',
+                            onStateChange
+                        );
+
+                        await cleanup();
+
+                        resolve();
                     };
 
 
                 const fail =
                     async error => {
-                        try {
-                            await cleanup();
-                        } catch {}
+                        if (settled) {
+                            return;
+                        }
+
+                        settled = true;
+
+                        player.off(
+                            'stateChange',
+                            onStateChange
+                        );
+
+                        await cleanup();
 
                         reject(error);
+                    };
+
+
+                const onStateChange =
+                    (
+                        oldState,
+                        newState
+                    ) => {
+
+                        if (
+                            newState.status ===
+                            AudioPlayerStatus.Playing
+                        ) {
+                            started = true;
+
+                            return;
+                        }
+
+
+                        if (
+                            started &&
+                            newState.status ===
+                            AudioPlayerStatus.Idle
+                        ) {
+                            finish();
+                        }
                     };
 
 
@@ -298,9 +336,9 @@ export class TTSPlayer {
                 );
 
 
-                player.once(
-                    AudioPlayerStatus.Idle,
-                    finish
+                player.on(
+                    'stateChange',
+                    onStateChange
                 );
 
 
