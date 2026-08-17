@@ -759,321 +759,290 @@ export class TTSSystem {
     }
 
 
-    handleVoiceStateUpdate(
-        oldState,
-        newState,
-        client
+handleVoiceStateUpdate(
+    oldState,
+    newState,
+    client
+) {
+    const guild =
+        newState.guild ||
+        oldState.guild;
+
+    if (!guild) {
+        return;
+    }
+
+    if (
+        oldState.id ===
+        client.user.id
     ) {
-        const guild =
-            newState.guild ||
-            oldState.guild;
+        const oldChannelId =
+            oldState.channelId;
 
-        if (!guild) {
-            return;
-        }
+        const newChannelId =
+            newState.channelId;
 
-        const botMember =
-            guild.members.me;
+        if (
+            oldState.serverMute !==
+            newState.serverMute ||
+            oldState.selfMute !==
+            newState.selfMute
+        ) {
+            if (
+                newState.serverMute ||
+                newState.selfMute
+            ) {
+                this.sendStatus(
+                    guild,
+                    'Fui silenciado en el canal de voz.'
+                );
+            }
 
-        if (!botMember) {
             return;
         }
 
         if (
-            oldState.id ===
-            client.user.id
+            oldChannelId ===
+            newChannelId
         ) {
+            return;
+        }
 
-            const oldChannelId =
-                oldState.channelId;
+        if (
+            oldChannelId &&
+            newChannelId
+        ) {
+            const timer =
+                this.leaveTimers.get(
+                    oldChannelId
+                );
 
-            const newChannelId =
-                newState.channelId;
+            if (timer) {
+                clearTimeout(timer);
 
-
-            if (
-                oldState.serverMute !==
-                newState.serverMute ||
-                oldState.selfMute !==
-                newState.selfMute
-            ) {
-
-                if (
-                    newState.serverMute ||
-                    newState.selfMute
-                ) {
-
-                    this.sendStatus(
-                        guild,
-                        'Fui silenciado en el canal de voz.'
-                    );
-                }
-
-                return;
+                this.leaveTimers.delete(
+                    oldChannelId
+                );
             }
 
+            const connection =
+                this.connections.get(
+                    guild.id
+                );
 
-            if (
-                oldChannelId ===
-                newChannelId
-            ) {
-                return;
+            if (connection) {
+                connection.destroy();
             }
 
+            this.connections.delete(
+                guild.id
+            );
+
+            this.players.delete(
+                guild.id
+            );
+
+            this.sendStatus(
+                guild,
+                'Fui movido de canal de voz.'
+            );
+
+            return;
+        }
+
+        if (
+            oldChannelId &&
+            !newChannelId
+        ) {
+            const timer =
+                this.leaveTimers.get(
+                    oldChannelId
+                );
+
+            if (timer) {
+                clearTimeout(timer);
+
+                this.leaveTimers.delete(
+                    oldChannelId
+                );
+            }
 
             if (
-                oldChannelId &&
-                newChannelId
+                this.inactivityDisconnects.has(
+                    guild.id
+                )
             ) {
-
-                const timer =
-                    this.leaveTimers.get(
-                        oldChannelId
-                    );
-
-                if (timer) {
-
-                    clearTimeout(
-                        timer
-                    );
-
-                    this.leaveTimers.delete(
-                        oldChannelId
-                    );
-                }
+                this.inactivityDisconnects.delete(
+                    guild.id
+                );
 
                 this.disconnect(
                     guild.id
                 );
 
-                this.sendStatus(
-                    guild,
-                    'Fui movido de canal de voz.'
-                );
-
                 return;
             }
 
+            this.disconnect(
+                guild.id
+            );
 
-            if (
-                oldChannelId &&
-                !newChannelId
-            ) {
+            this.sendStatus(
+                guild,
+                'Fui desconectado del canal de voz.'
+            );
 
-                const timer =
-                    this.leaveTimers.get(
-                        oldChannelId
-                    );
+            return;
+        }
 
-                if (timer) {
+        return;
+    }
 
-                    clearTimeout(
-                        timer
-                    );
+    const botMember =
+        guild.members.me;
 
-                    this.leaveTimers.delete(
-                        oldChannelId
-                    );
-                }
+    if (!botMember) {
+        return;
+    }
 
+    const botChannel =
+        botMember.voice.channel;
+
+    if (!botChannel) {
+        return;
+    }
+
+    const botChannelId =
+        botChannel.id;
+
+    if (
+        newState.channelId ===
+        botChannelId
+    ) {
+        const timer =
+            this.leaveTimers.get(
+                botChannelId
+            );
+
+        if (timer) {
+            clearTimeout(timer);
+
+            this.leaveTimers.delete(
+                botChannelId
+            );
+        }
+
+        return;
+    }
+
+    if (
+        oldState.channelId !==
+        botChannelId
+    ) {
+        return;
+    }
+
+    const member =
+        newState.member ||
+        oldState.member;
+
+    if (
+        !member ||
+        member.user.bot
+    ) {
+        return;
+    }
+
+    const humans =
+        botChannel.members.filter(
+            voiceMember =>
+                !voiceMember.user.bot
+        );
+
+    if (
+        humans.size > 0
+    ) {
+        return;
+    }
+
+    if (
+        this.leaveTimers.has(
+            botChannelId
+        )
+    ) {
+        return;
+    }
+
+    const timer =
+        setTimeout(
+            async () => {
+                this.leaveTimers.delete(
+                    botChannelId
+                );
+
+                const currentBotChannel =
+                    guild.members.me
+                        ?.voice.channel;
 
                 if (
-                    this.inactivityDisconnects.has(
-                        guild.id
-                    )
+                    !currentBotChannel ||
+                    currentBotChannel.id !==
+                    botChannelId
                 ) {
+                    return;
+                }
 
-                    this.inactivityDisconnects.delete(
+                const currentHumans =
+                    currentBotChannel.members.filter(
+                        voiceMember =>
+                            !voiceMember.user.bot
+                    );
+
+                if (
+                    currentHumans.size > 0
+                ) {
+                    return;
+                }
+
+                try {
+                    this.inactivityDisconnects.add(
                         guild.id
+                    );
+
+                    await this.sendStatus(
+                        guild,
+                        'Abandoné el canal de voz por inactividad.'
                     );
 
                     this.disconnect(
                         guild.id
                     );
 
-                    this.sendStatus(
-                        guild,
-                        'Abandoné el canal de voz por inactividad.'
-                    );
-
-                    return;
-                }
-
-
-                this.disconnect(
-                    guild.id
-                );
-
-                this.sendStatus(
-                    guild,
-                    'Fui desconectado del canal de voz.'
-                );
-
-                return;
-            }
-
-
-            return;
-        }
-
-
-        const botChannel =
-            botMember.voice.channel;
-
-        if (!botChannel) {
-            return;
-        }
-
-        const botChannelId =
-            botChannel.id;
-
-
-        if (
-            newState.channelId ===
-            botChannelId
-        ) {
-
-            const timer =
-                this.leaveTimers.get(
-                    botChannelId
-                );
-
-            if (timer) {
-
-                clearTimeout(
-                    timer
-                );
-
-                this.leaveTimers.delete(
-                    botChannelId
-                );
-            }
-
-            return;
-        }
-
-
-        if (
-            oldState.channelId !==
-            botChannelId
-        ) {
-            return;
-        }
-
-
-        const member =
-            newState.member ||
-            oldState.member;
-
-        if (
-            !member ||
-            member.user.bot
-        ) {
-            return;
-        }
-
-
-        const humans =
-            botChannel.members.filter(
-                voiceMember =>
-                    !voiceMember.user.bot
-            );
-
-        if (
-            humans.size > 0
-        ) {
-            return;
-        }
-
-
-        if (
-            this.leaveTimers.has(
-                botChannelId
-            )
-        ) {
-            return;
-        }
-
-
-        const timer =
-            setTimeout(
-                async () => {
-
-                    this.leaveTimers.delete(
-                        botChannelId
-                    );
-
-                    const currentBotChannel =
+                    if (
                         guild.members.me
-                            ?.voice.channel;
-
-                    if (
-                        !currentBotChannel ||
-                        currentBotChannel.id !==
-                            botChannelId
+                            ?.voice.channel
                     ) {
-                        return;
+                        await guild.members.me
+                            .voice
+                            .disconnect();
                     }
 
+                } catch (error) {
+                    this.inactivityDisconnects.delete(
+                        guild.id
+                    );
 
-                    const currentHumans =
-                        currentBotChannel.members.filter(
-                            voiceMember =>
-                                !voiceMember.user.bot
-                        );
-
-                    if (
-                        currentHumans.size > 0
-                    ) {
-                        return;
-                    }
-
-
-                    try {
-
-                        this.inactivityDisconnects.add(
-                            guild.id
-                        );
-
-                        await this.sendStatus(
-                            guild,
-                            'Abandoné el canal de voz por inactividad.'
-                        );
-
-                        this.disconnect(
-                            guild.id
-                        );
-
-                        if (
-                            guild.members.me
-                                ?.voice.channel
-                        ) {
-
-                            await guild.members.me
-                                .voice
-                                .disconnect();
-                        }
-
-                    } catch (error) {
-
-                        this.inactivityDisconnects.delete(
-                            guild.id
-                        );
-
-                        console.error(
-                            '[VOICE] Error al desconectar:',
-                            error
-                        );
-                    }
-
-                },
-                LEAVE_DELAY
-            );
-
-
-        this.leaveTimers.set(
-            botChannelId,
-            timer
+                    console.error(
+                        '[VOICE] Error al desconectar:',
+                        error
+                    );
+                }
+            },
+            LEAVE_DELAY
         );
-    }
+
+    this.leaveTimers.set(
+        botChannelId,
+        timer
+    );
 }
