@@ -3,59 +3,45 @@ import {
     GatewayIntentBits
 } from 'discord.js';
 
-import { config } from './utils/config.js';
-import { logger } from './utils/logger.js';
+import { TTSSystem } from './tts.js';
 
-import {
-    TTSManager
-} from './tts/manager.js';
+const TOKEN =
+    process.env.DISCORD_TOKEN;
 
-import ready from './events/ready.js';
-import messageCreate from './events/messageCreate.js';
-import voiceStateUpdate from './events/voiceStateUpdate.js';
-import error from './events/error.js';
+const TTS_CHANNEL_ID =
+    process.env.TTS_CHANNEL_ID;
 
-if (!config.token) {
+if (!TOKEN) {
     throw new Error(
         'DISCORD_TOKEN no está configurado.'
     );
 }
 
-if (!config.ttsChannelId) {
-    logger.warn(
-        'TTS_CHANNEL_ID no está configurado. El sistema TTS permanecerá desactivado.'
+if (!TTS_CHANNEL_ID) {
+    throw new Error(
+        'TTS_CHANNEL_ID no está configurado.'
     );
 }
 
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates
-    ]
-});
+const client =
+    new Client({
+        intents: [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.MessageContent,
+            GatewayIntentBits.GuildVoiceStates
+        ]
+    });
 
-client.ttsManager =
-    new TTSManager();
+const tts =
+    new TTSSystem();
 
 client.once(
     'clientReady',
-    async () => {
-        try {
-            await ready(client);
-
-            logger.success(
-                'DEVGRU-TTS está completamente iniciado.'
-            );
-        } catch (error) {
-            logger.error(
-                'No se pudo inicializar DEVGRU-TTS.',
-                error
-            );
-
-            process.exit(1);
-        }
+    () => {
+        console.log(
+            `✅ DEVGRU-TTS conectado como ${client.user.tag}`
+        );
     }
 );
 
@@ -63,13 +49,27 @@ client.on(
     'messageCreate',
     async message => {
         try {
-            await messageCreate(
-                message,
-                client
+            if (
+                message.author.bot ||
+                !message.guild
+            ) {
+                return;
+            }
+
+            if (
+                message.channel.id !==
+                TTS_CHANNEL_ID
+            ) {
+                return;
+            }
+
+            await tts.handleMessage(
+                message
             );
+
         } catch (error) {
-            logger.error(
-                'Error en messageCreate.',
+            console.error(
+                '[TTS] Error:',
                 error
             );
         }
@@ -83,14 +83,14 @@ client.on(
         newState
     ) => {
         try {
-            await voiceStateUpdate(
+            tts.handleVoiceStateUpdate(
                 oldState,
                 newState,
                 client
             );
         } catch (error) {
-            logger.error(
-                'Error en voiceStateUpdate.',
+            console.error(
+                '[VOICE] Error:',
                 error
             );
         }
@@ -99,14 +99,19 @@ client.on(
 
 client.on(
     'error',
-    error
+    error => {
+        console.error(
+            '[DISCORD] Error:',
+            error
+        );
+    }
 );
 
 process.on(
     'unhandledRejection',
     error => {
-        logger.error(
-            'Unhandled promise rejection.',
+        console.error(
+            '[PROCESS] Unhandled rejection:',
             error
         );
     }
@@ -115,13 +120,13 @@ process.on(
 process.on(
     'uncaughtException',
     error => {
-        logger.error(
-            'Uncaught exception.',
+        console.error(
+            '[PROCESS] Uncaught exception:',
             error
         );
     }
 );
 
 client.login(
-    config.token
+    TOKEN
 );
